@@ -1,0 +1,9 @@
+===== Holibot Setup with Vape Client =====
+
+Install minecraft forge 1.8.9 into the launcher. If you don't know anything about mods, there's lots of tutorials on youtube to get started.
+
+Next, you need to install the mod JS Macros, found on curseforge. Make sure to download the correct file (1.8.9) or your game will crash.
+
+The default key to open the Macros Menu is "k". First things first, paste all of the js (javascript files) into the macros folder it will be under /config/jsmacros/macros and accessable by the macros menu.
+
+Finally bind the script to a key and off you go. Since this is holibot v2 beta not everything is going to work and you will have to tweak some values because I am too lazy too. You can manually edit the code either in the buult in editor or any external editors.
