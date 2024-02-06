@@ -20,7 +20,13 @@ function dist_mid() {
     return distance
 }
 function get_closest() {
-    //const list = Client.getMinecraft()
+    var list = World.getLoadedPlayers().toArray();
+    var nearest = "";
+    for (i =0; i < list.length; i++) {
+        var distance = distancePlayer(list[i].loc);
+        if (distance >= nearest) continue;
+        nearest = distance;
+    }
 }
 
 function getBotState(posX, posY, posZ) {
