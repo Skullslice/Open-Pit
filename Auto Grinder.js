@@ -19,14 +19,20 @@ function dist_mid() {
     Player.getPlayer().getPos()?.x ** 2 + Player.getPlayer().getPos()?.z ** 2))
     return distance
 }
+
+function dist_player() {
+    //TODO: distance player
+    var loc = World.getLoadedPlayer
+}
 function get_closest() {
     var list = World.getLoadedPlayers().toArray();
-    var nearest = "";
+    var nearest = DOUBLE.MAX_VALUE;
     for (i =0; i < list.length; i++) {
-        var distance = distancePlayer(list[i].loc);
+        var distance = dist_player(list[i].loc);
         if (distance >= nearest) continue;
         nearest = distance;
     }
+    return nearest;
 }
 
 function getBotState(posX, posY, posZ) {
