@@ -28,6 +28,8 @@ function getMap() {
     }
     else if (hypixelHub) {
         //logic for the bot being in hub
+        Client.waitTick(150)
+        Chat.say("/play pit")
     }
     else if (kings) {
         currentMap = "kings"
