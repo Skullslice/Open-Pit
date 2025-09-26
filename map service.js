@@ -23,7 +23,7 @@ function getMap() {
     var hypixelHub = World?.getScoreboards()?.getCurrentScoreboard()?.getName()?.includes("MainScoreboard");
     
     //get the current map and set locations.
-    if (kings) {
+    if (kings == true) {
         currentMap = "kings"
         spawnY = 50
         groundY = 40
@@ -34,7 +34,7 @@ function getMap() {
         GlobalVars.putDouble("mapHeight", 80);
         
     }
-    else if (corals) {
+    else if (corals == true) {
         currentMap = "corals"
         spawnY = 50
         groundY = 40
@@ -44,7 +44,7 @@ function getMap() {
         GlobalVars.putDouble("clickHeight", 70);
         GlobalVars.putDouble("mapHeight", 80);
     }
-    else if (ogmap) {
+    else if (ogmap == true) {
         currentMap = "ogmap"
         spawnY = 50
         groundY = 40
@@ -54,7 +54,7 @@ function getMap() {
         GlobalVars.putDouble("clickHeight", 70);
         GlobalVars.putDouble("mapHeight", 80);
     }
-    else if (seasons) {
+    else if (seasons == true) {
         currentMap = "seasons"
         spawnY = 50
         groundY = 40
@@ -64,7 +64,7 @@ function getMap() {
         GlobalVars.putDouble("clickHeight", 70);
         GlobalVars.putDouble("mapHeight", 80);
     }
-    else if (genesis) {
+    else if (genesis == true) {
         currentMap = "genesis"
         spawnY = 50
         groundY = 40
@@ -74,15 +74,21 @@ function getMap() {
         GlobalVars.putDouble("clickHeight", 70);
         GlobalVars.putDouble("mapHeight", 80);
     }
+    else if (hypixelHub == true) {
+        Chat.say("/play pit");
+    }
+    else if (limbo == true) {
+        Client.disconnect();
+    }
     else {
         currentMap = "unknown"
-        spawnY = 0
-        groundY = 0
+        spawnY = -1
+        groundY = -1
         prestige = {x: 0, y: 0, z: 0}
         items = {x: 0, y: 0, z: 0}
         upgrades = {x: 0, y: 0, z: 0}
-        GlobalVars.putDouble("clickHeight", 70);
-        GlobalVars.putDouble("mapHeight", 80);
+        GlobalVars.putDouble("clickHeight", -1);
+        GlobalVars.putDouble("mapHeight", -1);
     }
     // returns a nested array of map information.
     mapInfo = [
