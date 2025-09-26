@@ -6,7 +6,7 @@ var items = {x: 0, y: 0, z: 0};
 var upgrades = {x: 0, y: 0, z: 0};
 var mapInfo = [];
 
-JsMacros.on("JoinServer", event => {
+JsMacros.on("JoinServer", JavaWrapper.methodToJava( event => {
     JsMacros.waitforevent("ChunkLoad");
     Client.waitTick(100); //wait 5 seconds for world to fully load
     getMap();
@@ -23,16 +23,7 @@ function getMap() {
     var hypixelHub = World?.getScoreboards()?.getCurrentScoreboard()?.getName()?.includes("MainScoreboard");
     
     //get the current map and set locations.
-    if (limbo) {
-       //logic for limbo
-        Client.disconnect();
-    }
-    else if (hypixelHub) {
-        //logic for the bot being in hub
-        Client.waitTick(150);
-        Chat.say("/play pit");
-    }
-    else if (kings) {
+    if (kings) {
         currentMap = "kings"
         spawnY = 50
         groundY = 40
