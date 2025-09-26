@@ -1,16 +1,18 @@
-var currentMap = "";
+var currentMap = null;
 var spawnY = 0;
 var groundY = 0;
 var prestige = {x: 0, y: 0, z: 0};
 var items = {x: 0, y: 0, z: 0};
 var upgrades = {x: 0, y: 0, z: 0};
 var mapInfo = [];
-var loaded = false;
 
 JsMacros.on("JoinServer", event => {
     JsMacros.waitforevent("ChunkLoad");
     Client.waitTick(100); //wait 5 seconds for world to fully load
     getMap();
+    if (currentMap != "unknown" || currentMap !== null) {
+        //great we know the bot is in a pit lobby.
+    }
     
 });
 
@@ -20,6 +22,7 @@ function getMap() {
     var ogmap = World.getBlock(-13, 114, 7)?.getId().toString() == "minecraft:ender_chest";
     var seasons = World.getBlock(-12, 114, 5)?.getId().toString() == "minecraft:ender_chest";
     var genesis = World.getBlock(0, 0, 0)?.getId().toString() == "minecraft:ender_chest";
+    var limbo = World.getBlock(-21, 33, 23)?.getId().toString() == "minecraft:torch" && World.getBlock(-21, 33, 19)?.getId().toString() == "minecraft:torch";
     
     //get the current map and set locations.
     if (kings) {
