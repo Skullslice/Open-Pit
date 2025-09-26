@@ -23,7 +23,7 @@ JsMacros.on("JoinServer", JavaWrapper.methodToJava( event => {
 
 JsMacros.on("Key", JavaWrapper.methodToJava( event => {
     if (event.key == "key.keyboard.i" && event.action === 1) {
-        const reverse = !GlobalVars.getBoolean("ToggleScript");
+        enabled = !enabled;
         GlobalVars.putBoolean("ToggleScript", reverse);
         if (reverse) {
             iterations = {final: false, count: 1};
