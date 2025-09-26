@@ -15,12 +15,11 @@ JsMacros.on("JoinServer", event => {
 });
 
 function getMap() {
-    // if the enderchest is at a location we know what map it is. x/z seems to be 1 off???
-    var kings = World.getBlock(-11, 95, 6)?.getId().toString() == "minecraft:ender_chest" //done
-    var corals = World.getBlock(0, 0, 0)?.getId().toString() == "minecraft:ender_chest"
-    var ogmap = World.getBlock(-13, 114, 7)?.getId().toString() == "minecraft:ender_chest" //done
-    var seasons = World.getBlock(0, 0, 0)?.getId().toString() == "minecraft:ender_chest"
-    var genesis = World.getBlock(0, 0, 0)?.getId().toString() == "minecraft:ender_chest"
+    var kings = World.getBlock(-11, 95, 6)?.getId().toString() == "minecraft:ender_chest";
+    var corals = World.getBlock(0, 0, 0)?.getId().toString() == "minecraft:ender_chest";
+    var ogmap = World.getBlock(-13, 114, 7)?.getId().toString() == "minecraft:ender_chest";
+    var seasons = World.getBlock(-12, 114, 5)?.getId().toString() == "minecraft:ender_chest";
+    var genesis = World.getBlock(0, 0, 0)?.getId().toString() == "minecraft:ender_chest";
     
     //get the current map and set locations.
     if (kings) {
