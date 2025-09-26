@@ -1,16 +1,8 @@
-JsMacros.runScript("index.js")
 var mapHeight = GlobalVars.getDouble("spawnHeight")
-//sneak sometimes?
 var sneak = true
-//reconnect and play pit?
 var reconnect = true
-//lobby finder?
 var finder = false
-//how good does the lobby have to be for the bot to stay there?
-//it is reccomended you leave this below 1
-//the formula for this is (nons in middle / streakers in middle)
 var quality = 0.45
-//the minimum amount of irons/chains in middle for the bot to want to stay in the lobby
 var minimum = 2
 
 // Holiday Auto Grinder -->
