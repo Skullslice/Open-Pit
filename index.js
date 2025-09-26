@@ -5,7 +5,14 @@ var prestige = {x: 0, y: 0, z: 0};
 var items = {x: 0, y: 0, z: 0};
 var upgrades = {x: 0, y: 0, z: 0};
 var mapInfo = [];
+var loaded = false;
 
+JsMacros.on("JoinServer", event => {
+    JsMacros.waitforevent("ChunkLoad");
+    Client.waitTick(100); //wait 5 seconds for world to fully load
+    getMap();
+    
+});
 
 function getMap() {
     // if the enderchest is at a location we know what map it is. x/z seems to be 1 off???
@@ -88,4 +95,3 @@ function getMap() {
     ]
     return mapInfo;
 }
-Chat.log(getMap().toString())
