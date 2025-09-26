@@ -10,9 +10,6 @@ JsMacros.on("JoinServer", event => {
     JsMacros.waitforevent("ChunkLoad");
     Client.waitTick(100); //wait 5 seconds for world to fully load
     getMap();
-    if (currentMap != "unknown" || currentMap !== null) {
-        //great we know the bot is in a pit lobby.
-    }
     
 });
 
@@ -23,9 +20,16 @@ function getMap() {
     var seasons = World.getBlock(-12, 114, 5)?.getId().toString() == "minecraft:ender_chest";
     var genesis = World.getBlock(0, 0, 0)?.getId().toString() == "minecraft:ender_chest";
     var limbo = World.getBlock(-21, 33, 23)?.getId().toString() == "minecraft:torch" && World.getBlock(-21, 33, 19)?.getId().toString() == "minecraft:torch";
+    var hypixelHub = World?.getScoreboards()?.getCurrentScoreboard()?.getName()?.includes("MainScoreboard");
     
     //get the current map and set locations.
-    if (kings) {
+    if (limbo) {
+       //logic for limbo
+    }
+    else if (hypixelHub) {
+        //logic for the bot being in hub
+    }
+    else if (kings) {
         currentMap = "kings"
         spawnY = 50
         groundY = 40
