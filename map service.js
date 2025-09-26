@@ -25,11 +25,12 @@ function getMap() {
     //get the current map and set locations.
     if (limbo) {
        //logic for limbo
+        Client.disconnect();
     }
     else if (hypixelHub) {
         //logic for the bot being in hub
-        Client.waitTick(150)
-        Chat.say("/play pit")
+        Client.waitTick(150);
+        Chat.say("/play pit");
     }
     else if (kings) {
         currentMap = "kings"
