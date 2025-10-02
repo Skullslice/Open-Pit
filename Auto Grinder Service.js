@@ -7,39 +7,63 @@ var quality = 0.45
 var minimum = 2
 
 var currentMap = null;
-var spawnY = 0;
-var groundY = 0;
 var prestige = {x: 0, y: 0, z: 0};
 var items = {x: 0, y: 0, z: 0};
 var upgrades = {x: 0, y: 0, z: 0};
 var mapInfo = [];
 
-JsMacros.on("JoinServer", JavaWrapper.methodToJava( event => {
-    JsMacros.waitforevent("ChunkLoad");
-    Client.waitTick(100); //wait 5 seconds for world to fully load
-    getMap();
+var locationStatus = undefined;
+var posX = undefined;
+var posY = undefined;
+var posZ = undefined;
+
+var currentTime = undefined;
+
+var streakingBox = {
+    constraint_x1: undefined,
+    constraint_x2: undefined,
+    constraint_y1: undefined,
+    constraint_y2: undefined,
+    constraint_z1: undefined,
+    constraint_z2: undefined,
+    spawnY: undefined
+};
+
+JsMacros.on("Disconnect", JavaWrapper.methodToJava( event => {
+    locationStatus = undefined;
+    currentMap = null;
     
-});
+}));
+
+JsMacros.on("JoinServer", JavaWrapper.methodToJava( event => {
+    Client.waitTick(1);
+}));
+
+
+JsMacros.on("Tick", JavaWrapper.methodToJava( event => {
+    if (!World.isWorldLoaded()) return;
+    if (streakingBox.spawnY === undefined) {
+        Client.waitTick(1);
+        getMap();
+    }
+    if (!enabled) return;
+    getBotState();
+    
+}));
 
 JsMacros.on("Key", JavaWrapper.methodToJava( event => {
     if (event.key == "key.keyboard.i" && event.action === 1) {
         enabled = !enabled;
-        GlobalVars.putBoolean("ToggleScript", reverse);
-        if (reverse) {
-            iterations = {final: false, count: 1};
-            GlobalVars.putInt("iterations", 1);
-            Chat.log("\u00a74> \u00a73[\u00a7cAfk\u00a73] \u00a74> \u00a7aWaiting for afk kick ->" + " \u00a7b#" + iterations.count);
+        if (enabled) {
+            Chat.actionbar("started");
+        } else {
+            Chat.actionbar("stopped");
         }
-        else {
-            iterations = {final: false, count: "\u00a7f[\u00a78Disabled\u00a7f]"};
-            Chat.log("\u00a74> \u00a73[\u00a7cAfk\u00a73] \u00a74> \u00a7f[\u00a78Disabled\u00a7f]");
-        }
-        return true;
     }
-    return false;
 }));
 
 function getMap() {
+    
     var kings = World.getBlock(-11, 95, 6)?.getId().toString() == "minecraft:ender_chest";
     var corals = World.getBlock(0, 0, 0)?.getId().toString() == "minecraft:ender_chest";
     var ogmap = World.getBlock(-13, 114, 7)?.getId().toString() == "minecraft:ender_chest";
@@ -49,91 +73,136 @@ function getMap() {
     var hypixelHub = World?.getScoreboards()?.getCurrentScoreboard()?.getName()?.includes("MainScoreboard");
     
     //get the current map and set locations.
-    if (kings == true) {
+    if (kings) {
         currentMap = "kings"
-        spawnY = 50
-        groundY = 40
         prestige = {x: 0, y: 0, z: 0}
         items = {x: 0, y: 0, z: 0}
         upgrades = {x: 0, y: 0, z: 0}
-        GlobalVars.putDouble("clickHeight", 70);
-        GlobalVars.putDouble("mapHeight", 80);
+        streakingBox.constraint_x1 = 15
+        streakingBox.constraint_x2 = -15
+        streakingBox.constraint_z1 = 15
+        streakingBox.constraint_z2 = -15
+        streakingBox.constraint_y1 = 86
+        streakingBox.constraint_y2 = 80
+        streakingBox.spawnY = 113
         
     }
-    else if (corals == true) {
+    else if (corals) {
         currentMap = "corals"
-        spawnY = 50
-        groundY = 40
         prestige = {x: 0, y: 0, z: 0}
         items = {x: 0, y: 0, z: 0}
         upgrades = {x: 0, y: 0, z: 0}
-        GlobalVars.putDouble("clickHeight", 70);
-        GlobalVars.putDouble("mapHeight", 80);
+        streakingBox.constraint_x1 = 15
+        streakingBox.constraint_x2 = -15
+        streakingBox.constraint_z1 = 15
+        streakingBox.constraint_z2 = -15
+        streakingBox.constraint_y1 = 86
+        streakingBox.constraint_y2 = 80
+        streakingBox.spawnY = 113
     }
-    else if (ogmap == true) {
+    else if (ogmap) {
         currentMap = "ogmap"
-        spawnY = 50
-        groundY = 40
         prestige = {x: 0, y: 0, z: 0}
         items = {x: 0, y: 0, z: 0}
         upgrades = {x: 0, y: 0, z: 0}
-        GlobalVars.putDouble("clickHeight", 70);
-        GlobalVars.putDouble("mapHeight", 80);
+        streakingBox.constraint_x1 = 15
+        streakingBox.constraint_x2 = -15
+        streakingBox.constraint_z1 = 15
+        streakingBox.constraint_z2 = -15
+        streakingBox.constraint_y1 = 86
+        streakingBox.constraint_y2 = 80
+        streakingBox.spawnY = 113
     }
-    else if (seasons == true) {
+    else if (seasons) {
         currentMap = "seasons"
-        spawnY = 50
-        groundY = 40
         prestige = {x: 0, y: 0, z: 0}
         items = {x: 0, y: 0, z: 0}
         upgrades = {x: 0, y: 0, z: 0}
-        GlobalVars.putDouble("clickHeight", 70);
-        GlobalVars.putDouble("mapHeight", 80);
+        streakingBox.constraint_x1 = 15
+        streakingBox.constraint_x2 = -15
+        streakingBox.constraint_z1 = 15
+        streakingBox.constraint_z2 = -15
+        streakingBox.constraint_y1 = 86
+        streakingBox.constraint_y2 = 80
+        streakingBox.spawnY = 90
     }
-    else if (genesis == true) {
+    else if (genesis) {
         currentMap = "genesis"
-        spawnY = 50
-        groundY = 40
         prestige = {x: 0, y: 0, z: 0}
         items = {x: 0, y: 0, z: 0}
         upgrades = {x: 0, y: 0, z: 0}
-        GlobalVars.putDouble("clickHeight", 70);
-        GlobalVars.putDouble("mapHeight", 80);
+        streakingBox.constraint_x1 = 15
+        streakingBox.constraint_x2 = -15
+        streakingBox.constraint_z1 = 15
+        streakingBox.constraint_z2 = -15
+        streakingBox.constraint_y1 = 86
+        streakingBox.constraint_y2 = 80
+        streakingBox.spawnY = 113
     }
-    else if (hypixelHub == true) {
-        Chat.say("/play pit");
+    else if (hypixelHub) {
+        currentMap = "Hypixel Hub";
+        prestige = {x: 0, y: 0, z: 0};
+        items = {x: 0, y: 0, z: 0};
+        upgrades = {x: 0, y: 0, z: 0};
+        streakingBox.constraint_x1 = undefined;
+        streakingBox.constraint_x2 = undefined;
+        streakingBox.constraint_z1 = undefined;
+        streakingBox.constraint_z2 = undefined;
+        streakingBox.constraint_y1 = undefined;
+        streakingBox.constraint_y2 = undefined;
+        streakingBox.spawnY = undefined;
     }
-    else if (limbo == true) {
-        Client.disconnect();
+    else if (limbo) {
+        currentMap = "Hypixel Limbo";
+        prestige = {x: 0, y: 0, z: 0};
+        items = {x: 0, y: 0, z: 0};
+        upgrades = {x: 0, y: 0, z: 0};
+        streakingBox.constraint_x1 = undefined;
+        streakingBox.constraint_x2 = undefined;
+        streakingBox.constraint_z1 = undefined;
+        streakingBox.constraint_z2 = undefined;
+        streakingBox.constraint_y1 = undefined;
+        streakingBox.constraint_y2 = undefined;
+        streakingBox.spawnY = undefined;
     }
     else {
-        currentMap = "unknown"
-        spawnY = -1
-        groundY = -1
-        prestige = {x: 0, y: 0, z: 0}
-        items = {x: 0, y: 0, z: 0}
-        upgrades = {x: 0, y: 0, z: 0}
-        GlobalVars.putDouble("clickHeight", -1);
-        GlobalVars.putDouble("mapHeight", -1);
+        currentMap = "Unknown";
+        prestige = {x: 0, y: 0, z: 0};
+        items = {x: 0, y: 0, z: 0};
+        upgrades = {x: 0, y: 0, z: 0};
+        streakingBox.constraint_x1 = undefined;
+        streakingBox.constraint_x2 = undefined;
+        streakingBox.constraint_z1 = undefined;
+        streakingBox.constraint_z2 = undefined;
+        streakingBox.constraint_y1 = undefined;
+        streakingBox.constraint_y2 = undefined;
+        streakingBox.spawnY = undefined;
     }
     // returns a nested array of map information.
     mapInfo = [
-    "Map: " + currentMap,
-    " Spawn: " + spawnY,
-    " Ground: " + groundY,
-    " Prestige: " + prestige.x, prestige.y, prestige.z,
-    " Items: " + items.x, items.y, items.z,
-    " Upgrades: " + upgrades.x, upgrades.y, upgrades.z
+    "Map: " + currentMap + "\n",
+    " Spawn: " + streakingBox.spawnY + "\n",
+    " Ground: " + streakingBox.constraint_y2 + "\n",
+    " Prestige: " + prestige.x + " " + prestige.y + " " + prestige.z + "\n",
+    " Items: " + items.x + " " + items.y + " " + items.z + "\n",
+    " Upgrades: " + upgrades.x + " " + upgrades.y + " " + upgrades.z, + "\n",
+    " Streaking Box:\n" + streakingBox.constraint_x1 + "\n" + streakingBox.constraint_x2 + "\n" + streakingBox.constraint_y1 + "\n" + streakingBox.constraint_y2 + "\n" + streakingBox.constraint_z1 + "\n" + streakingBox.constraint_z2
     ]
     return mapInfo;
 }
 
-
-// Holiday Auto Grinder -->
 function dist_mid() {
     const distance = Math.floor(Math.sqrt(
     Player.getPlayer().getPos()?.x ** 2 + Player.getPlayer().getPos()?.z ** 2))
     return distance
+}
+
+function inSpawn() {
+    return posY > streakingBox.spawnY && posX < 22 && posX > -22 && posZ < 22 && posZ > -22;
+}
+
+function inStreakingBox() {
+    return posX < streakingBox.constraint_x1 && posX > streakingBox.constraint_x2 && posZ < streakingBox.constraint_z1 && posZ > streakingBox.constraint_z2 && posY < streakingBox.constraint_y1 && posY > streakingBox.constraint_y2;
 }
 
 function dist_player() {
@@ -142,159 +211,168 @@ function dist_player() {
 }
 function get_closest() {
     var list = World.getLoadedPlayers().toArray();
-    var nearest = DOUBLE.MAX_VALUE;
+    var nearestLoc = DOUBLE.MAX_VALUE;
     for (i =0; i < list.length; i++) {
         var distance = dist_player(list[i].loc);
         if (distance >= nearest) continue;
+        var target = list[i].loc;
         nearest = distance;
     }
     return nearest;
 }
 
-function getBotState(posX, posY, posZ) {
-    if (World.isWorldLoaded() && World.getDimension() !== "minecraft:the_end") {
-        var area = World.getScoreboards().getCurrentScoreboard()?.getName()
-        var botwrld = area?.toString()
-        if (botwrld?.includes("Pit", 0)) {
-            // bot is in pit
-            GlobalVars.putBoolean("isPit", true)
-        }
-        if (botwrld?.includes("MainScoreboard", 0) || botwrld?.includes("Prototype", 0)) {
-            //bot is in hub
-            GlobalVars.putBoolean("isPit", false)
-            var countdown = Math.floor((GlobalVars.getObject("waitPlay") - Time.time()) / 1000)
-            if (countdown >= 1) {
-            Chat.log("\u00A78[\u00A7cCMD\u00A78]\u00A7a "
-            + (Math.floor(countdown)))
-            Client.waitTick(15)
-            }
-            if (GlobalVars.getObject("waitPlay") < Time.time()) {
-                // this is a little glitchy so we also need to update the cooldown
-                GlobalVars.putObject("waitPlay", (Time.time() + 9000))
-                GlobalVars.putObject("waitHub", (Time.time() + 9000))
-                Chat.say("/play pit")
-                Chat.log("\u00A7aNo thanks, I like the pit better")
-            }
-        }
+function getBotState() {
+    posX = Player.getPlayer().getPos()?.x;
+    posY = Player.getPlayer().getPos()?.y;
+    posZ = Player.getPlayer().getPos()?.z;
+    
+    if (inStreakingBox() === true) {
+        locationStatus = "[Streaking Box]";
     }
-    else {
-        GlobalVars.putBoolean("isPit", false)
-    }      
-    if (World.isWorldLoaded() && World.getDimension() == "minecraft:the_end") {
-        //bot is in limbo
-        var countdown = Math.floor((GlobalVars.getObject("waitHub") - Time.time()) / 1000)
-        if (countdown >= 1) {
-        Chat.log("\u00A78[\u00A7cCMD\u00A78]\u00A76 "
-        + (Math.floor(countdown)))
-        Client.waitTick(15)
-        }
-        if (GlobalVars.getObject("waitHub") < Time.time()) {
-            GlobalVars.putObject("waitHub", (Time.time() + 9000))
-            GlobalVars.putObject("waitPlay", (Time.time() + 9000))
-            Chat.say("/hub")
-        }
+    else if (inSpawn() === true) {
+        locationStatus = "[Spawn]";
+        executeLookAtCenter();
+        //bot is in spawn area
     }
-    else if (GlobalVars.getBoolean("majorStop")) {
-        var majorCD = Math.floor((GlobalVars.getObject("endTime") - Time.time()) * 0.001)
-        KeyBind.key(17, false)
-        if (majorCD >= 1) {
-            Chat.log("\u00A78[\u00A7bMajor Event\u00A78]\u00A76 " + majorCD)
-            Chat.say(".toggle aim-assist off")
-        }
-        else {
-            GlobalVars.putBoolean("majorStop", false)
-            Chat.log("\u00A78[\u00A7cMajor Event\u00A78] \u00A7aEnded")
-        }
-    Client.waitTick(80)
+    else if (inSpawn() === false && inStreakingBox() === false) {
+        locationStatus = "[Down and outside bounds]";
+        //bot is down and out.
     }
-    else if (posX > 20 || posX < -20 || posZ > 20 || posZ < -20)
-        {
-        if (GlobalVars.getBoolean("isPit"))
-            {
-            Chat.log("\u00A78[\u00A7cCMD\u00A78] \u00A74Exited")
-            Client.waitTick(3)
-            KeyBind.key(17, false)
-            Client.waitTick(2)
-            Chat.say("/oof")
-            Client.waitTick(25) //wait before doing anything
-            }
-        }
-    else if (posY < mapHeight)
-        {
-        //Chat.log("In Bounding Box!")
-        KeyBind.key(17, true)
-        if (Math.random() > 0.77)
-            {
-            JsMacros.runScript("Jump.js")
-            }
-        // here we need to use a cubic expression to determine if the bot should look back to middle or not
-        if (Math.random() * 2050 < (Math.abs(posX) ** 3) //reccomended to leave between 2000 - 6000
-        || Math.random() * 2050 < (Math.abs(posZ) ** 3))
-            {
-            JsMacros.runScript("Smooth Look.js")
-            //Chat.log('\u00a7cLooked')
-            }
-        if (Math.random() > 0.98 && sneak)
-            {
-            JsMacros.runScript("Sneak.js")
-            }
-        }
-    else
-        {
-        KeyBind.key(17, false)
-        //Chat.log("Bot is in spawn.")
-        JsMacros.runScript("Smooth Look.js")
-        JsMacros.runScript("Quality.js")
-        Client.waitTick(6) // look at mid before doing anything
-        KeyBind.key(17, true)
-        while (World.isWorldLoaded() && dist_mid() > 5 && GlobalVars.getBoolean("ToggleScript")
-        && dist_mid() < 30) // check if we are in spawn or script gets stopped
-            {
-            if (GlobalVars.getDouble("midnons") < minimum
-            || GlobalVars.getDouble("midquality") < quality) {
-                if (GlobalVars.getObject("waitPlay") < Time.time() && finder) {
-                    KeyBind.key(17, false)
-                    Client.waitTick(4)
-                    GlobalVars.putObject("waitPlay", (Time.time() + 8500))
-                    Chat.say("/play pit")
-                }
-            }
-            //Chat.log('distance: ' + dist_mid())
-            JsMacros.runScript("Smooth Look.js")
-            KeyBind.key(17, true)
-            if (dist_mid() >= 9)
-                {
-                JsMacros.runScript("Jump.js")
-                }
-            Time.sleep(250)
-            }
-        }
+    
+    Chat.actionbar(locationStatus + " Distance to Middle: " + dist_mid());
 }
-// Enable -->
-const reverse = !GlobalVars.getBoolean("ToggleScript");
-GlobalVars.putBoolean("ToggleScript", reverse);
-if (reverse) {
-    Chat.log("Holibot Enabled")
-    JsMacros.runScript("Auto Click.js")
-    } 
-    else
-    {
-        KeyBind.key(17, false)
-        Client.waitTick(3)
-        Chat.log("Holibot Disabled")
-        JsMacros.runScript("Auto Click.js")
-        Time.sleep(3000)
-        KeyBind.key(17, false)
+
+/**
+ * optimized jsmacros script for looking towards world center (0,0) on respawn
+ * uses smooth movement with jitter to appear more natural
+ */
+
+// cache frequently used objects and constants
+const PLAYER = Player.getPlayer();
+const CURRENT_TIME = Time.time();
+const WORLD_CENTER = { x: 0, y: 0, z: 0 }; // target coordinates (middle of world)
+
+// movement configuration constants
+const MOVEMENT_CONFIG = {
+    MIN_COOLDOWN: 120,      // minimum time between look cycles (ms)
+    MAX_COOLDOWN: 550,      // maximum time between look cycles (ms)
+    MIN_DURATION: 600,      // minimum look animation time (ms)
+    MAX_DURATION: 750,      // maximum look animation time (ms)
+    STEP_INTERVAL: 5,       // time between each movement step (ms)
+    TARGET_JITTER: 1,       // ±degrees of jitter on target angles
+    STEP_JITTER: 0.25,      // ±degrees of jitter per movement step
+    POSITION_NOISE: 0.5     // ±blocks of noise on target position
+};
+
+/**
+ * generates random integer between min and max (inclusive)
+ * @param {number} min - minimum value
+ * @param {number} max - maximum value
+ * @returns {number} random integer in range
+ */
+function rng(min, max) {
+    return Math.floor(Math.random() * (max - min + 1) + min);
+}
+
+/**
+ * adds small random offset to a coordinate
+ * @param {number} base - base coordinate value
+ * @param {number} noise - maximum noise amount (±)
+ * @returns {number} coordinate with noise applied
+ */
+function addNoise(base, noise) {
+    return base + (Math.random() * 2 - 1) * noise;
+}
+
+/**
+ * normalizes yaw angle to be within -180 to 180 degrees
+ * @param {number} yaw - yaw angle to normalize
+ * @returns {number} normalized yaw angle
+ */
+function normalizeYaw(yaw) {
+    while (yaw <= -180) yaw += 360;
+    while (yaw >= 180) yaw -= 360;
+    return yaw;
+}
+
+/**
+ * calculates target angles to look at world center with noise
+ * @returns {object} object containing goalYaw and goalPitch
+ */
+function calculateTargetAngles() {
+    // get player position with eye height offset
+    const playerPos = {
+        x: PLAYER.getX(),
+        y: PLAYER.getY() + PLAYER.getEyeHeight(),
+        z: PLAYER.getZ()
+    };
+    
+    // add noise to target position for more natural movement
+    const noisyTarget = {
+        x: addNoise(WORLD_CENTER.x, MOVEMENT_CONFIG.POSITION_NOISE),
+        y: addNoise(WORLD_CENTER.y, MOVEMENT_CONFIG.POSITION_NOISE),
+        z: addNoise(WORLD_CENTER.z, MOVEMENT_CONFIG.POSITION_NOISE)
+    };
+    
+    // create vector to calculate angles
+    const POSITIONCOMMON_VEC3D = Java.type("xyz.wagyourtail.jsmacros.client.api.sharedclasses.PositionCommon$Vec3D");
+    const vec = new POSITIONCOMMON_VEC3D(
+        playerPos.x, playerPos.y, playerPos.z,
+        noisyTarget.x, noisyTarget.y, noisyTarget.z
+    );
+    
+    // get base angles and add jitter
+    let goalYaw = vec.getYaw() + (Math.random() * 2 - 1) * MOVEMENT_CONFIG.TARGET_JITTER;
+    let goalPitch = vec.getPitch() + (Math.random() * 2 - 1) * MOVEMENT_CONFIG.TARGET_JITTER;
+    
+    return { goalYaw, goalPitch };
+}
+
+/**
+ * performs smooth look movement towards target angles
+ * @param {number} goalYaw - target yaw angle
+ * @param {number} goalPitch - target pitch angle
+ */
+function performLookMovement(goalYaw, goalPitch) {
+    const duration = rng(MOVEMENT_CONFIG.MIN_DURATION, MOVEMENT_CONFIG.MAX_DURATION);
+    const steps = Math.floor(duration / MOVEMENT_CONFIG.STEP_INTERVAL);
+    
+    // calculate angle differences
+    let yawDiff = normalizeYaw(goalYaw - PLAYER.getYaw());
+    let pitchDiff = goalPitch - PLAYER.getPitch();
+    
+    // perform smooth movement with jitter
+    for (let i = 0; i < steps; i++) {
+        const currentYaw = PLAYER.getYaw();
+        const currentPitch = PLAYER.getPitch();
+        
+        // calculate next step with jitter
+        const stepYaw = currentYaw + (yawDiff / steps) + 
+            (Math.random() * 2 - 1) * MOVEMENT_CONFIG.STEP_JITTER;
+        const stepPitch = currentPitch + (pitchDiff / steps) + 
+            (Math.random() * 2 - 1) * MOVEMENT_CONFIG.STEP_JITTER;
+        
+        PLAYER.lookAt(stepYaw, stepPitch);
+        Time.sleep(MOVEMENT_CONFIG.STEP_INTERVAL);
     }
-while (GlobalVars.getBoolean("ToggleScript")) {
-    if (World.isWorldLoaded()) {
-        var posX = Player.getPlayer().getPos()?.x
-        var posY = Player.getPlayer().getPos()?.y
-        var posZ = Player.getPlayer().getPos()?.z
-        var currentTime = Time.time()
-        //if (posX) {
-        getBotState(posX, posY, posZ)
-        //}
+}
+
+/**
+ * main execution function - checks cooldown and performs look movement
+ */
+function executeLookAtCenter() {
+    const cooldown = rng(MOVEMENT_CONFIG.MIN_COOLDOWN, MOVEMENT_CONFIG.MAX_COOLDOWN);
+    const lastLookTime = GlobalVars.getObject("lookCD");
+    
+    // check if enough time has passed since last look
+    if (lastLookTime == null || lastLookTime < CURRENT_TIME) {
+        // update cooldown timer
+        GlobalVars.putObject("lookCD", CURRENT_TIME + cooldown);
+        
+        // calculate target angles
+        const { goalYaw, goalPitch } = calculateTargetAngles();
+        
+        // perform the look movement
+        performLookMovement(goalYaw, goalPitch);
     }
-    Client.waitTick(5); // wait 0.25 seconds (synchronized to client ticks)
 }
