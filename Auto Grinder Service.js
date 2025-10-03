@@ -206,6 +206,19 @@ function inStreakingBox() {
     return posX < streakingBox.constraint_x1 && posX > streakingBox.constraint_x2 && posZ < streakingBox.constraint_z1 && posZ > streakingBox.constraint_z2 && posY < streakingBox.constraint_y1 && posY > streakingBox.constraint_y2;
 }
 
+function getTarget() {
+    var online = World.getLoadedPlayers().toArray();
+    //start at i=1 because i=0 is always Player.getPlayer() (you)
+    for (i = 1; i < online.length; i++) {
+        var x = online[i].getX()
+        var y = online[i].getY()
+        var z = online[i].getZ()
+        if (x > streakingBox.constraint_x1 && x < streakingBox.constraint_x2 && z > streakingBox.constraint_z1 && z < streakingBox.constraint_z2 && y > streakingBox.constraint_y1 && y < streakingBox.constraint_y2) online.remove(i);
+    }
+    //alright at this point online only contains people who are in the streaking bounds.
+    //pick one and go after them!
+}
+
 function get_closest() {
     var list = World.getLoadedPlayers().toArray();
     var nearestLoc = DOUBLE.MAX_VALUE;
@@ -290,22 +303,13 @@ function normalizeYaw(yaw) {
     return yaw;
 }
 
+var noisyTarget = {x: undefined, y: undefined, z: undefined};
+
 function calculateTargetAngles() {
-    const playerPos = {
-        x: PLAYER.getX(),
-        y: PLAYER.getY() + PLAYER.getEyeHeight(),
-        z: PLAYER.getZ()
-    };
-    
-    const noisyTarget = {
-        x: addNoise(WORLD_CENTER.x, MOVEMENT_CONFIG.POSITION_NOISE),
-        y: addNoise(WORLD_CENTER.y, MOVEMENT_CONFIG.POSITION_NOISE),
-        z: addNoise(WORLD_CENTER.z, MOVEMENT_CONFIG.POSITION_NOISE)
-    };
-    
+    if (noisyTarget.x === undefined || noisyTarget.y === undefined || noisyTarget.z === undefined) return false;
     const POSITIONCOMMON_VEC3D = Java.type("xyz.wagyourtail.jsmacros.client.api.sharedclasses.PositionCommon$Vec3D");
     const vec = new POSITIONCOMMON_VEC3D(
-        playerPos.x, playerPos.y, playerPos.z,
+        posX, posY, posZ,
         noisyTarget.x, noisyTarget.y, noisyTarget.z
     );
     
