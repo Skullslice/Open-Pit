@@ -15,6 +15,7 @@ JsMacros.on("Tick", JavaWrapper.methodToJava( event => {
         Client.waitTick(1);
         getMap();
     }
+    
     if (!enabled) return;
     if (tickDelay > 0) {
         tickDelay--;
@@ -205,10 +206,6 @@ function inStreakingBox() {
     return posX < streakingBox.constraint_x1 && posX > streakingBox.constraint_x2 && posZ < streakingBox.constraint_z1 && posZ > streakingBox.constraint_z2 && posY < streakingBox.constraint_y1 && posY > streakingBox.constraint_y2;
 }
 
-function dist_player() {
-    //TODO: distance player
-    var loc = World.getLoadedPlayer
-}
 function get_closest() {
     var list = World.getLoadedPlayers().toArray();
     var nearestLoc = DOUBLE.MAX_VALUE;
@@ -245,7 +242,7 @@ function getBotState() {
     }
     else if (inSpawn() === false && inStreakingBox() === false) {
         locationStatus = "[Down and outside bounds]";
-        //re - adjust and try to get the bot back inside of ring.
+        //stop moving, look at middle, and try to get the bot back inside of ring.
         stopStreaking();
         tickDelay = Math.ceil(Math.random() * 20);
         if (executeLookAtCenter()) {
@@ -267,16 +264,6 @@ function stopStreaking() {
     KeyBind.releaseKeyBind("key.forward");
 }
 
-/**
- * optimized jsmacros script for looking towards world center (0,0) on respawn
- * uses smooth movement with jitter to appear more natural
- */
-
-// cache frequently used objects and constants
-const PLAYER = Player.getPlayer();
-const CURRENT_TIME = Time.time();
-const WORLD_CENTER = { x: 0, y: 0, z: 0 }; // target coordinates (middle of world)
-
 // movement configuration constants
 const MOVEMENT_CONFIG = {
     MIN_COOLDOWN: 120,      // minimum time between look cycles (ms)
@@ -289,89 +276,54 @@ const MOVEMENT_CONFIG = {
     POSITION_NOISE: 0.18     // ±blocks of noise on target position
 };
 
-/**
- * generates random integer between min and max (inclusive)
- * @param {number} min - minimum value
- * @param {number} max - maximum value
- * @returns {number} random integer in range
- */
 function rng(min, max) {
     return Math.floor(Math.random() * (max - min + 1) + min);
 }
 
-/**
- * adds small random offset to a coordinate
- * @param {number} base - base coordinate value
- * @param {number} noise - maximum noise amount (±)
- * @returns {number} coordinate with noise applied
- */
 function addNoise(base, noise) {
     return base + (Math.random() * 2 - 1) * noise;
 }
 
-/**
- * normalizes yaw angle to be within -180 to 180 degrees
- * @param {number} yaw - yaw angle to normalize
- * @returns {number} normalized yaw angle
- */
 function normalizeYaw(yaw) {
     if (yaw <= -180) yaw += 360;
     if (yaw >= 180) yaw -= 360;
     return yaw;
 }
 
-/**
- * calculates target angles to look at world center with noise
- * @returns {object} object containing goalYaw and goalPitch
- */
 function calculateTargetAngles() {
-    // get player position with eye height offset
     const playerPos = {
         x: PLAYER.getX(),
         y: PLAYER.getY() + PLAYER.getEyeHeight(),
         z: PLAYER.getZ()
     };
     
-    // add noise to target position for more natural movement
     const noisyTarget = {
         x: addNoise(WORLD_CENTER.x, MOVEMENT_CONFIG.POSITION_NOISE),
         y: addNoise(WORLD_CENTER.y, MOVEMENT_CONFIG.POSITION_NOISE),
         z: addNoise(WORLD_CENTER.z, MOVEMENT_CONFIG.POSITION_NOISE)
     };
     
-    // create vector to calculate angles
     const POSITIONCOMMON_VEC3D = Java.type("xyz.wagyourtail.jsmacros.client.api.sharedclasses.PositionCommon$Vec3D");
     const vec = new POSITIONCOMMON_VEC3D(
         playerPos.x, playerPos.y, playerPos.z,
         noisyTarget.x, noisyTarget.y, noisyTarget.z
     );
     
-    // get base angles and add jitter
     let goalYaw = vec.getYaw() + (Math.random() * 2 - 1) * MOVEMENT_CONFIG.TARGET_JITTER;
     let goalPitch = vec.getPitch() + (Math.random() * 2 - 1) * MOVEMENT_CONFIG.TARGET_JITTER;
     
     return { goalYaw, goalPitch };
 }
 
-/**
- * performs smooth look movement towards target angles
- * @param {number} goalYaw - target yaw angle
- * @param {number} goalPitch - target pitch angle
- */
 function performLookMovement(goalYaw, goalPitch) {
     const duration = rng(MOVEMENT_CONFIG.MIN_DURATION, MOVEMENT_CONFIG.MAX_DURATION);
     const steps = Math.floor(duration / MOVEMENT_CONFIG.STEP_INTERVAL);
-    
-    // calculate angle differences
     let yawDiff = normalizeYaw(goalYaw - PLAYER.getYaw());
     let pitchDiff = goalPitch - PLAYER.getPitch();
     
-    // perform smooth movement with jitter
     for (let i = 0; i < steps; i++) {
         const currentYaw = PLAYER.getYaw();
         const currentPitch = PLAYER.getPitch();
-        
-        // calculate next step with jitter
         const stepYaw = currentYaw + (yawDiff / steps) + 
             (Math.random() * 2 - 1) * MOVEMENT_CONFIG.STEP_JITTER;
         const stepPitch = currentPitch + (pitchDiff / steps) + 
@@ -382,23 +334,13 @@ function performLookMovement(goalYaw, goalPitch) {
     }
 }
 
-/**
- * main execution function - checks cooldown and performs look movement
- * if the movement is on cooldown it returns the cooldown TICKS left passed into Client.waitTick().
- */
 function executeLookAtCenter() {
     const cooldown = rng(MOVEMENT_CONFIG.MIN_COOLDOWN, MOVEMENT_CONFIG.MAX_COOLDOWN);
     const lastLookTime = GlobalVars.getObject("lookCD");
     
-    // check if enough time has passed since last look
     if (lastLookTime == null || lastLookTime < CURRENT_TIME) {
-        // update cooldown timer
         GlobalVars.putObject("lookCD", CURRENT_TIME + cooldown);
-        
-        // calculate target angles
         const { goalYaw, goalPitch } = calculateTargetAngles();
-        
-        // perform the look movement
         performLookMovement(goalYaw, goalPitch);
         return true;
     }
