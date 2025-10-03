@@ -6,28 +6,24 @@ var waterbreak = true;
 var quality = 0.45
 var minimum = 2
 
-var currentMap = null;
-var prestige = {x: 0, y: 0, z: 0};
-var items = {x: 0, y: 0, z: 0};
-var upgrades = {x: 0, y: 0, z: 0};
-var mapInfo = [];
-
-var locationStatus = undefined;
-var posX = undefined;
-var posY = undefined;
-var posZ = undefined;
-
 var currentTime = undefined;
 
-var streakingBox = {
-    constraint_x1: undefined,
-    constraint_x2: undefined,
-    constraint_y1: undefined,
-    constraint_y2: undefined,
-    constraint_z1: undefined,
-    constraint_z2: undefined,
-    spawnY: undefined
-};
+var tickDelay = 0;
+JsMacros.on("Tick", JavaWrapper.methodToJava( event => {
+    if (!World.isWorldLoaded()) return;
+    if (streakingBox.spawnY === undefined) {
+        Client.waitTick(1);
+        getMap();
+    }
+    if (!enabled) return;
+    if (tickDelay > 0) {
+        tickDelay--;
+        return;
+    }
+
+    getBotState();
+    
+}));
 
 JsMacros.on("Disconnect", JavaWrapper.methodToJava( event => {
     locationStatus = undefined;
@@ -37,18 +33,6 @@ JsMacros.on("Disconnect", JavaWrapper.methodToJava( event => {
 
 JsMacros.on("JoinServer", JavaWrapper.methodToJava( event => {
     Client.waitTick(1);
-}));
-
-
-JsMacros.on("Tick", JavaWrapper.methodToJava( event => {
-    if (!World.isWorldLoaded()) return;
-    if (streakingBox.spawnY === undefined) {
-        Client.waitTick(1);
-        getMap();
-    }
-    if (!enabled) return;
-    getBotState();
-    
 }));
 
 JsMacros.on("Key", JavaWrapper.methodToJava( event => {
@@ -61,6 +45,22 @@ JsMacros.on("Key", JavaWrapper.methodToJava( event => {
         }
     }
 }));
+
+var streakingBox = {
+    constraint_x1: undefined,
+    constraint_x2: undefined,
+    constraint_y1: undefined,
+    constraint_y2: undefined,
+    constraint_z1: undefined,
+    constraint_z2: undefined,
+    spawnY: undefined
+};
+
+var currentMap = null;
+var prestige = {x: 0, y: 0, z: 0};
+var items = {x: 0, y: 0, z: 0};
+var upgrades = {x: 0, y: 0, z: 0};
+var mapInfo = [];
 
 function getMap() {
     
@@ -221,6 +221,11 @@ function get_closest() {
     return nearest;
 }
 
+var locationStatus = undefined;
+var posX = undefined;
+var posY = undefined;
+var posZ = undefined;
+
 function getBotState() {
     posX = Player.getPlayer().getPos()?.x;
     posY = Player.getPlayer().getPos()?.y;
@@ -231,15 +236,35 @@ function getBotState() {
     }
     else if (inSpawn() === true) {
         locationStatus = "[Spawn]";
-        executeLookAtCenter();
-        //bot is in spawn area
+        stopStreaking();
+        if (executeLookAtCenter()) {
+            tickDelay = Math.ceil(Math.random() * 20);
+        } else {
+            KeyBind.pressKeyBind("key.forward");
+        }
     }
     else if (inSpawn() === false && inStreakingBox() === false) {
         locationStatus = "[Down and outside bounds]";
-        //bot is down and out.
+        //re - adjust and try to get the bot back inside of ring.
+        stopStreaking();
+        tickDelay = Math.ceil(Math.random() * 20);
+        if (executeLookAtCenter()) {
+            tickDelay = Math.ceil(Math.random() * 20);
+        }
+        else {
+            startStreaking();
+        }
     }
     
     Chat.actionbar(locationStatus + " Distance to Middle: " + dist_mid());
+}
+
+function startStreaking() {
+    KeyBind.pressKeyBind("key.forward");
+}
+
+function stopStreaking() {
+    KeyBind.releaseKeyBind("key.forward");
 }
 
 /**
@@ -260,8 +285,8 @@ const MOVEMENT_CONFIG = {
     MAX_DURATION: 750,      // maximum look animation time (ms)
     STEP_INTERVAL: 5,       // time between each movement step (ms)
     TARGET_JITTER: 1,       // ±degrees of jitter on target angles
-    STEP_JITTER: 0.25,      // ±degrees of jitter per movement step
-    POSITION_NOISE: 0.5     // ±blocks of noise on target position
+    STEP_JITTER: 0.08,      // ±degrees of jitter per movement step
+    POSITION_NOISE: 0.18     // ±blocks of noise on target position
 };
 
 /**
@@ -290,8 +315,8 @@ function addNoise(base, noise) {
  * @returns {number} normalized yaw angle
  */
 function normalizeYaw(yaw) {
-    while (yaw <= -180) yaw += 360;
-    while (yaw >= 180) yaw -= 360;
+    if (yaw <= -180) yaw += 360;
+    if (yaw >= 180) yaw -= 360;
     return yaw;
 }
 
@@ -359,6 +384,7 @@ function performLookMovement(goalYaw, goalPitch) {
 
 /**
  * main execution function - checks cooldown and performs look movement
+ * if the movement is on cooldown it returns the cooldown TICKS left passed into Client.waitTick().
  */
 function executeLookAtCenter() {
     const cooldown = rng(MOVEMENT_CONFIG.MIN_COOLDOWN, MOVEMENT_CONFIG.MAX_COOLDOWN);
@@ -374,5 +400,7 @@ function executeLookAtCenter() {
         
         // perform the look movement
         performLookMovement(goalYaw, goalPitch);
+        return true;
     }
+    return false;
 }
