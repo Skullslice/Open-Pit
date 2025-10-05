@@ -5,32 +5,26 @@ var finder = true;
 var waterbreak = true;
 var quality = 0.45
 var minimum = 2
-
 var locationStatus = undefined;
 var posX = undefined;
 var posY = undefined;
 var posZ = undefined;
-var tickDelay = 0;
+
+var aimTickDelay = 0;
 JsMacros.on("Tick", JavaWrapper.methodToJava(event => {
     if (!World.isWorldLoaded()) return;
     if (streakingBox.spawnY === undefined) {
         Client.waitTick(1);
         getMap();
     }
-
-    // Always update position
-    const pos = Player.getPlayer().getPos();
-    posX = pos?.x;
-    posY = pos?.y;
-    posZ = pos?.z;
-
+    
     if (!enabled) return;
-    if (tickDelay > 0) {
-        tickDelay--;
+    
+    getBotState();
+    if (aimTickDelay > 0) {
+        aimTickDelay--;
         return;
     }
-
-    getBotState();
 
     // Aim logic
     const target = getTarget();
@@ -261,11 +255,6 @@ function lookAtTarget({x, y, z}) {
     const me = Player.getPlayer();
     const px = me.getX(), py = me.getY(), pz = me.getZ();
 
-    // Constants for realism
-    const INTERPOLATION_SPEED = 0.15;
-    const NOISE_YAW = (Math.random() - 0.5) * 2;     // ±1°
-    const NOISE_PITCH = (Math.random() - 0.5) * 1.5; // ±0.75°
-
     // Calculate raw angles
     const dx = x - px;
     const dy = y - (py + me.getEyeHeight());
@@ -275,50 +264,64 @@ function lookAtTarget({x, y, z}) {
     const targetYaw = -Math.atan2(dx, dz) * (180 / Math.PI);
     const targetPitch = -Math.atan2(dy, distXZ) * (180 / Math.PI);
 
-    const currentYaw = me.getYaw();
-    const currentPitch = me.getPitch();
+    let currentYaw = me.getYaw();
+    let currentPitch = me.getPitch();
 
-    // Interpolate
-    const newYaw = currentYaw + (targetYaw - currentYaw) * INTERPOLATION_SPEED + NOISE_YAW;
-    const newPitch = currentPitch + (targetPitch - currentPitch) * INTERPOLATION_SPEED + NOISE_PITCH;
-
-    me.lookYaw(newYaw);
-    me.lookPitch(newPitch);
-
-    // Cooldown scales with angular distance
+    // Total angular distance
     const yawDelta = Math.abs(targetYaw - currentYaw);
     const pitchDelta = Math.abs(targetPitch - currentPitch);
     const totalDelta = yawDelta + pitchDelta;
 
-    // Normalize and clamp
+    // Delay based on angular effort
     const scaledDelay = Math.min(Math.ceil(totalDelta / 10), 20); // max 20 ticks
-    tickDelay = scaledDelay;
+    const delayMs = scaledDelay * 50; // 1 tick = 50ms
+
+    // Interpolation loop
+    for (let i = 0; i < 10; i++) {
+        // Randomized aim speed per iteration
+        const aimSpeed = 0.1 + Math.random() * 0.2;
+
+        // Recalculate deltas
+        const yawDiff = targetYaw - currentYaw;
+        const pitchDiff = targetPitch - currentPitch;
+
+        // Apply interpolation with noise
+        const noiseYaw = (Math.random() * 2 - 1) * 0.11;
+        const noisePitch = (Math.random() * 2 - 1) * 0.08;
+
+        currentYaw += yawDiff * aimSpeed + noiseYaw;
+        currentPitch += pitchDiff * aimSpeed + noisePitch;
+
+        me.lookAt(currentYaw, currentPitch);
+
+        Time.sleep(delayMs);
+    }
 }
 
 function getBotState() {
+    const pos = Player.getPlayer().getPos();
+    posX = pos?.x;
+    posY = pos?.y;
+    posZ = pos?.z;
+    
     if (inStreakingBox() === true) {
         locationStatus = "[Streaking Box]";
+        lookAtTarget(getTarget());
+        startStreaking();
     }
     else if (inSpawn() === true) {
         locationStatus = "[Spawn]";
         stopStreaking();
-        if (executeLookAtCenter()) {
-            tickDelay = Math.ceil(Math.random() * 20);
-        } else {
-            KeyBind.pressKeyBind("key.forward");
-        }
+        lookAtTarget(getTarget());
+        Client.waitTick(30); // when respawn add some delay to give the bot time to look at middle.
+        startStreaking();
     }
     else if (inSpawn() === false && inStreakingBox() === false) {
         locationStatus = "[Down and outside bounds]";
-        //stop moving, look at middle, and try to get the bot back inside of ring.
         stopStreaking();
-        tickDelay = Math.ceil(Math.random() * 20);
-        if (executeLookAtCenter()) {
-            tickDelay = Math.ceil(Math.random() * 20);
-        }
-        else {
-            startStreaking();
-        }
+        aimTickDelay = Math.ceil(Math.random() * 20);
+        Chat.say("/oof");
+        Client.waitTick(1);
     }
     
     Chat.actionbar(locationStatus + " Distance to Middle: " + dist_mid());
