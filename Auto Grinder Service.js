@@ -6,16 +6,24 @@ var waterbreak = true;
 var quality = 0.45
 var minimum = 2
 
-var currentTime = undefined;
-
+var locationStatus = undefined;
+var posX = undefined;
+var posY = undefined;
+var posZ = undefined;
 var tickDelay = 0;
-JsMacros.on("Tick", JavaWrapper.methodToJava( event => {
+JsMacros.on("Tick", JavaWrapper.methodToJava(event => {
     if (!World.isWorldLoaded()) return;
     if (streakingBox.spawnY === undefined) {
         Client.waitTick(1);
         getMap();
     }
-    
+
+    // Always update position
+    const pos = Player.getPlayer().getPos();
+    posX = pos?.x;
+    posY = pos?.y;
+    posZ = pos?.z;
+
     if (!enabled) return;
     if (tickDelay > 0) {
         tickDelay--;
@@ -23,8 +31,14 @@ JsMacros.on("Tick", JavaWrapper.methodToJava( event => {
     }
 
     getBotState();
-    
+
+    // Aim logic
+    const target = getTarget();
+    if (target) {
+        lookAtTarget(target);
+    }
 }));
+
 
 JsMacros.on("Disconnect", JavaWrapper.methodToJava( event => {
     locationStatus = undefined;
@@ -207,40 +221,81 @@ function inStreakingBox() {
 }
 
 function getTarget() {
-    var online = World.getLoadedPlayers().toArray();
-    //start at i=1 because i=0 is always Player.getPlayer() (you)
-    for (i = 1; i < online.length; i++) {
-        var x = online[i].getX()
-        var y = online[i].getY()
-        var z = online[i].getZ()
-        if (x > streakingBox.constraint_x1 && x < streakingBox.constraint_x2 && z > streakingBox.constraint_z1 && z < streakingBox.constraint_z2 && y > streakingBox.constraint_y1 && y < streakingBox.constraint_y2) online.remove(i);
-    }
-    //alright at this point online only contains people who are in the streaking bounds.
-    //pick one and go after them!
+    const middle = {x: 0, y: streakingBox.spawnY, z: 0};
+    const me = Player.getPlayer();
+    const px = me.getX(), py = me.getY(), pz = me.getZ();
+
+    if (inSpawn()) return middle;
+    
+    const online = World.getLoadedPlayers().toArray().filter(p => {
+        if (p.getName() === me.getName()) return false;
+
+        const x = p.getX(), y = p.getY(), z = p.getZ();
+        const withinBox =
+            x >= streakingBox.constraint_x1 && x <= streakingBox.constraint_x2 &&
+            y >= streakingBox.constraint_y1 && y <= streakingBox.constraint_y2 &&
+            z >= streakingBox.constraint_z1 && z <= streakingBox.constraint_z2;
+
+        const verticalOk = Math.abs(y - py) <= 1.5;
+
+        return withinBox && verticalOk;
+    });
+
+    if (online.length === 0) return null;
+
+    online.sort((a, b) => {
+        const da = Math.hypot(a.getX() - px, a.getY() - py, a.getZ() - pz);
+        const db = Math.hypot(b.getX() - px, b.getY() - py, b.getZ() - pz);
+        return da - db;
+    });
+
+    const target = online[0];
+    return {
+        x: target.getX(),
+        y: target.getY() + target.getEyeHeight(),
+        z: target.getZ()
+    };
 }
 
-function get_closest() {
-    var list = World.getLoadedPlayers().toArray();
-    var nearestLoc = DOUBLE.MAX_VALUE;
-    for (i =0; i < list.length; i++) {
-        var distance = dist_player(list[i].loc);
-        if (distance >= nearest) continue;
-        var target = list[i].loc;
-        nearest = distance;
-    }
-    return nearest;
-}
+function lookAtTarget({x, y, z}) {
+    const me = Player.getPlayer();
+    const px = me.getX(), py = me.getY(), pz = me.getZ();
 
-var locationStatus = undefined;
-var posX = undefined;
-var posY = undefined;
-var posZ = undefined;
+    // Constants for realism
+    const INTERPOLATION_SPEED = 0.15;
+    const NOISE_YAW = (Math.random() - 0.5) * 2;     // ±1°
+    const NOISE_PITCH = (Math.random() - 0.5) * 1.5; // ±0.75°
+
+    // Calculate raw angles
+    const dx = x - px;
+    const dy = y - (py + me.getEyeHeight());
+    const dz = z - pz;
+
+    const distXZ = Math.sqrt(dx * dx + dz * dz);
+    const targetYaw = -Math.atan2(dx, dz) * (180 / Math.PI);
+    const targetPitch = -Math.atan2(dy, distXZ) * (180 / Math.PI);
+
+    const currentYaw = me.getYaw();
+    const currentPitch = me.getPitch();
+
+    // Interpolate
+    const newYaw = currentYaw + (targetYaw - currentYaw) * INTERPOLATION_SPEED + NOISE_YAW;
+    const newPitch = currentPitch + (targetPitch - currentPitch) * INTERPOLATION_SPEED + NOISE_PITCH;
+
+    me.lookYaw(newYaw);
+    me.lookPitch(newPitch);
+
+    // Cooldown scales with angular distance
+    const yawDelta = Math.abs(targetYaw - currentYaw);
+    const pitchDelta = Math.abs(targetPitch - currentPitch);
+    const totalDelta = yawDelta + pitchDelta;
+
+    // Normalize and clamp
+    const scaledDelay = Math.min(Math.ceil(totalDelta / 10), 20); // max 20 ticks
+    tickDelay = scaledDelay;
+}
 
 function getBotState() {
-    posX = Player.getPlayer().getPos()?.x;
-    posY = Player.getPlayer().getPos()?.y;
-    posZ = Player.getPlayer().getPos()?.z;
-    
     if (inStreakingBox() === true) {
         locationStatus = "[Streaking Box]";
     }
@@ -275,78 +330,4 @@ function startStreaking() {
 
 function stopStreaking() {
     KeyBind.releaseKeyBind("key.forward");
-}
-
-// movement configuration constants
-const MOVEMENT_CONFIG = {
-    MIN_COOLDOWN: 120,      // minimum time between look cycles (ms)
-    MAX_COOLDOWN: 550,      // maximum time between look cycles (ms)
-    MIN_DURATION: 600,      // minimum look animation time (ms)
-    MAX_DURATION: 750,      // maximum look animation time (ms)
-    STEP_INTERVAL: 5,       // time between each movement step (ms)
-    TARGET_JITTER: 1,       // ±degrees of jitter on target angles
-    STEP_JITTER: 0.08,      // ±degrees of jitter per movement step
-    POSITION_NOISE: 0.18     // ±blocks of noise on target position
-};
-
-function rng(min, max) {
-    return Math.floor(Math.random() * (max - min + 1) + min);
-}
-
-function addNoise(base, noise) {
-    return base + (Math.random() * 2 - 1) * noise;
-}
-
-function normalizeYaw(yaw) {
-    if (yaw <= -180) yaw += 360;
-    if (yaw >= 180) yaw -= 360;
-    return yaw;
-}
-
-var noisyTarget = {x: undefined, y: undefined, z: undefined};
-
-function calculateTargetAngles() {
-    if (noisyTarget.x === undefined || noisyTarget.y === undefined || noisyTarget.z === undefined) return false;
-    const POSITIONCOMMON_VEC3D = Java.type("xyz.wagyourtail.jsmacros.client.api.sharedclasses.PositionCommon$Vec3D");
-    const vec = new POSITIONCOMMON_VEC3D(
-        posX, posY, posZ,
-        noisyTarget.x, noisyTarget.y, noisyTarget.z
-    );
-    
-    let goalYaw = vec.getYaw() + (Math.random() * 2 - 1) * MOVEMENT_CONFIG.TARGET_JITTER;
-    let goalPitch = vec.getPitch() + (Math.random() * 2 - 1) * MOVEMENT_CONFIG.TARGET_JITTER;
-    
-    return { goalYaw, goalPitch };
-}
-
-function performLookMovement(goalYaw, goalPitch) {
-    const duration = rng(MOVEMENT_CONFIG.MIN_DURATION, MOVEMENT_CONFIG.MAX_DURATION);
-    const steps = Math.floor(duration / MOVEMENT_CONFIG.STEP_INTERVAL);
-    let yawDiff = normalizeYaw(goalYaw - PLAYER.getYaw());
-    let pitchDiff = goalPitch - PLAYER.getPitch();
-    
-    for (let i = 0; i < steps; i++) {
-        const currentYaw = PLAYER.getYaw();
-        const currentPitch = PLAYER.getPitch();
-        const stepYaw = currentYaw + (yawDiff / steps) + 
-            (Math.random() * 2 - 1) * MOVEMENT_CONFIG.STEP_JITTER;
-        const stepPitch = currentPitch + (pitchDiff / steps) + 
-            (Math.random() * 2 - 1) * MOVEMENT_CONFIG.STEP_JITTER;
-        
-        PLAYER.lookAt(stepYaw, stepPitch);
-        Time.sleep(MOVEMENT_CONFIG.STEP_INTERVAL);
-    }
-}
-
-function executeLookAtCenter() {
-    const cooldown = rng(MOVEMENT_CONFIG.MIN_COOLDOWN, MOVEMENT_CONFIG.MAX_COOLDOWN);
-    const lastLookTime = GlobalVars.getObject("lookCD");
-    
-    if (lastLookTime == null || lastLookTime < CURRENT_TIME) {
-        GlobalVars.putObject("lookCD", CURRENT_TIME + cooldown);
-        const { goalYaw, goalPitch } = calculateTargetAngles();
-        performLookMovement(goalYaw, goalPitch);
-        return true;
-    }
-    return false;
 }
