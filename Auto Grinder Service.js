@@ -11,6 +11,8 @@ var posY = undefined;
 var posZ = undefined;
 
 var aimTickDelay = 0;
+var commandTickCooldown = 0
+
 JsMacros.on("Tick", JavaWrapper.methodToJava(event => {
     if (!World.isWorldLoaded()) return;
     if (streakingBox.spawnY === undefined) {
@@ -20,7 +22,9 @@ JsMacros.on("Tick", JavaWrapper.methodToJava(event => {
     
     if (!enabled) return;
     
+    commandTickCooldown--;
     getBotState();
+    
     if (aimTickDelay > 0) {
         aimTickDelay--;
         return;
@@ -320,8 +324,7 @@ function getBotState() {
         locationStatus = "[Down and outside bounds]";
         stopStreaking();
         aimTickDelay = Math.ceil(Math.random() * 20);
-        Chat.say("/oof");
-        Client.waitTick(1);
+        oof();
     }
     
     Chat.actionbar(locationStatus + " Distance to Middle: " + dist_mid());
@@ -333,4 +336,11 @@ function startStreaking() {
 
 function stopStreaking() {
     KeyBind.releaseKeyBind("key.forward");
+}
+
+function oof() {
+    if (commandTickCooldown < 1) {
+        Chat.say("/oof");
+        commandTickCooldown += 200;
+    }   
 }
