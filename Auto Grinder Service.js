@@ -5,41 +5,74 @@ var finder = true;
 var waterbreak = true;
 var quality = 0.45
 var minimum = 2
+var locationStatus = undefined;
+var posX = undefined;
+var posY = undefined;
+var posZ = undefined;
+
+var aimTickDelay = 0;
+JsMacros.on("Tick", JavaWrapper.methodToJava(event => {
+    if (!World.isWorldLoaded()) return;
+    if (streakingBox.spawnY === undefined) {
+        Client.waitTick(1);
+        getMap();
+    }
+    
+    if (!enabled) return;
+    
+    getBotState();
+    if (aimTickDelay > 0) {
+        aimTickDelay--;
+        return;
+    }
+
+    // Aim logic
+    const target = getTarget();
+    if (target) {
+        lookAtTarget(target);
+    }
+}));
+
+
+JsMacros.on("Disconnect", JavaWrapper.methodToJava( event => {
+    locationStatus = undefined;
+    currentMap = null;
+    
+}));
+
+JsMacros.on("JoinServer", JavaWrapper.methodToJava( event => {
+    Client.waitTick(1);
+}));
+
+JsMacros.on("Key", JavaWrapper.methodToJava( event => {
+    if (event.key == "key.keyboard.i" && event.action === 1) {
+        enabled = !enabled;
+        if (enabled) {
+            Chat.actionbar("started");
+        } else {
+            Chat.actionbar("stopped");
+        }
+    }
+}));
+
+var streakingBox = {
+    constraint_x1: undefined,
+    constraint_x2: undefined,
+    constraint_y1: undefined,
+    constraint_y2: undefined,
+    constraint_z1: undefined,
+    constraint_z2: undefined,
+    spawnY: undefined
+};
 
 var currentMap = null;
-var spawnY = 0;
-var groundY = 0;
 var prestige = {x: 0, y: 0, z: 0};
 var items = {x: 0, y: 0, z: 0};
 var upgrades = {x: 0, y: 0, z: 0};
 var mapInfo = [];
 
-JsMacros.on("JoinServer", JavaWrapper.methodToJava( event => {
-    JsMacros.waitforevent("ChunkLoad");
-    Client.waitTick(100); //wait 5 seconds for world to fully load
-    getMap();
-    
-});
-
-JsMacros.on("Key", JavaWrapper.methodToJava( event => {
-    if (event.key == "key.keyboard.i" && event.action === 1) {
-        enabled = !enabled;
-        GlobalVars.putBoolean("ToggleScript", reverse);
-        if (reverse) {
-            iterations = {final: false, count: 1};
-            GlobalVars.putInt("iterations", 1);
-            Chat.log("\u00a74> \u00a73[\u00a7cAfk\u00a73] \u00a74> \u00a7aWaiting for afk kick ->" + " \u00a7b#" + iterations.count);
-        }
-        else {
-            iterations = {final: false, count: "\u00a7f[\u00a78Disabled\u00a7f]"};
-            Chat.log("\u00a74> \u00a73[\u00a7cAfk\u00a73] \u00a74> \u00a7f[\u00a78Disabled\u00a7f]");
-        }
-        return true;
-    }
-    return false;
-}));
-
 function getMap() {
+    
     var kings = World.getBlock(-11, 95, 6)?.getId().toString() == "minecraft:ender_chest";
     var corals = World.getBlock(0, 0, 0)?.getId().toString() == "minecraft:ender_chest";
     var ogmap = World.getBlock(-13, 114, 7)?.getId().toString() == "minecraft:ender_chest";
@@ -49,252 +82,255 @@ function getMap() {
     var hypixelHub = World?.getScoreboards()?.getCurrentScoreboard()?.getName()?.includes("MainScoreboard");
     
     //get the current map and set locations.
-    if (kings == true) {
+    if (kings) {
         currentMap = "kings"
-        spawnY = 50
-        groundY = 40
         prestige = {x: 0, y: 0, z: 0}
         items = {x: 0, y: 0, z: 0}
         upgrades = {x: 0, y: 0, z: 0}
-        GlobalVars.putDouble("clickHeight", 70);
-        GlobalVars.putDouble("mapHeight", 80);
+        streakingBox.constraint_x1 = 15
+        streakingBox.constraint_x2 = -15
+        streakingBox.constraint_z1 = 15
+        streakingBox.constraint_z2 = -15
+        streakingBox.constraint_y1 = 86
+        streakingBox.constraint_y2 = 80
+        streakingBox.spawnY = 113
         
     }
-    else if (corals == true) {
+    else if (corals) {
         currentMap = "corals"
-        spawnY = 50
-        groundY = 40
         prestige = {x: 0, y: 0, z: 0}
         items = {x: 0, y: 0, z: 0}
         upgrades = {x: 0, y: 0, z: 0}
-        GlobalVars.putDouble("clickHeight", 70);
-        GlobalVars.putDouble("mapHeight", 80);
+        streakingBox.constraint_x1 = 15
+        streakingBox.constraint_x2 = -15
+        streakingBox.constraint_z1 = 15
+        streakingBox.constraint_z2 = -15
+        streakingBox.constraint_y1 = 86
+        streakingBox.constraint_y2 = 80
+        streakingBox.spawnY = 113
     }
-    else if (ogmap == true) {
+    else if (ogmap) {
         currentMap = "ogmap"
-        spawnY = 50
-        groundY = 40
         prestige = {x: 0, y: 0, z: 0}
         items = {x: 0, y: 0, z: 0}
         upgrades = {x: 0, y: 0, z: 0}
-        GlobalVars.putDouble("clickHeight", 70);
-        GlobalVars.putDouble("mapHeight", 80);
+        streakingBox.constraint_x1 = 15
+        streakingBox.constraint_x2 = -15
+        streakingBox.constraint_z1 = 15
+        streakingBox.constraint_z2 = -15
+        streakingBox.constraint_y1 = 86
+        streakingBox.constraint_y2 = 80
+        streakingBox.spawnY = 113
     }
-    else if (seasons == true) {
+    else if (seasons) {
         currentMap = "seasons"
-        spawnY = 50
-        groundY = 40
         prestige = {x: 0, y: 0, z: 0}
         items = {x: 0, y: 0, z: 0}
         upgrades = {x: 0, y: 0, z: 0}
-        GlobalVars.putDouble("clickHeight", 70);
-        GlobalVars.putDouble("mapHeight", 80);
+        streakingBox.constraint_x1 = 15
+        streakingBox.constraint_x2 = -15
+        streakingBox.constraint_z1 = 15
+        streakingBox.constraint_z2 = -15
+        streakingBox.constraint_y1 = 86
+        streakingBox.constraint_y2 = 80
+        streakingBox.spawnY = 90
     }
-    else if (genesis == true) {
+    else if (genesis) {
         currentMap = "genesis"
-        spawnY = 50
-        groundY = 40
         prestige = {x: 0, y: 0, z: 0}
         items = {x: 0, y: 0, z: 0}
         upgrades = {x: 0, y: 0, z: 0}
-        GlobalVars.putDouble("clickHeight", 70);
-        GlobalVars.putDouble("mapHeight", 80);
+        streakingBox.constraint_x1 = 15
+        streakingBox.constraint_x2 = -15
+        streakingBox.constraint_z1 = 15
+        streakingBox.constraint_z2 = -15
+        streakingBox.constraint_y1 = 86
+        streakingBox.constraint_y2 = 80
+        streakingBox.spawnY = 113
     }
-    else if (hypixelHub == true) {
-        Chat.say("/play pit");
+    else if (hypixelHub) {
+        currentMap = "Hypixel Hub";
+        prestige = {x: 0, y: 0, z: 0};
+        items = {x: 0, y: 0, z: 0};
+        upgrades = {x: 0, y: 0, z: 0};
+        streakingBox.constraint_x1 = undefined;
+        streakingBox.constraint_x2 = undefined;
+        streakingBox.constraint_z1 = undefined;
+        streakingBox.constraint_z2 = undefined;
+        streakingBox.constraint_y1 = undefined;
+        streakingBox.constraint_y2 = undefined;
+        streakingBox.spawnY = undefined;
     }
-    else if (limbo == true) {
-        Client.disconnect();
+    else if (limbo) {
+        currentMap = "Hypixel Limbo";
+        prestige = {x: 0, y: 0, z: 0};
+        items = {x: 0, y: 0, z: 0};
+        upgrades = {x: 0, y: 0, z: 0};
+        streakingBox.constraint_x1 = undefined;
+        streakingBox.constraint_x2 = undefined;
+        streakingBox.constraint_z1 = undefined;
+        streakingBox.constraint_z2 = undefined;
+        streakingBox.constraint_y1 = undefined;
+        streakingBox.constraint_y2 = undefined;
+        streakingBox.spawnY = undefined;
     }
     else {
-        currentMap = "unknown"
-        spawnY = -1
-        groundY = -1
-        prestige = {x: 0, y: 0, z: 0}
-        items = {x: 0, y: 0, z: 0}
-        upgrades = {x: 0, y: 0, z: 0}
-        GlobalVars.putDouble("clickHeight", -1);
-        GlobalVars.putDouble("mapHeight", -1);
+        currentMap = "Unknown";
+        prestige = {x: 0, y: 0, z: 0};
+        items = {x: 0, y: 0, z: 0};
+        upgrades = {x: 0, y: 0, z: 0};
+        streakingBox.constraint_x1 = undefined;
+        streakingBox.constraint_x2 = undefined;
+        streakingBox.constraint_z1 = undefined;
+        streakingBox.constraint_z2 = undefined;
+        streakingBox.constraint_y1 = undefined;
+        streakingBox.constraint_y2 = undefined;
+        streakingBox.spawnY = undefined;
     }
     // returns a nested array of map information.
     mapInfo = [
-    "Map: " + currentMap,
-    " Spawn: " + spawnY,
-    " Ground: " + groundY,
-    " Prestige: " + prestige.x, prestige.y, prestige.z,
-    " Items: " + items.x, items.y, items.z,
-    " Upgrades: " + upgrades.x, upgrades.y, upgrades.z
+    "Map: " + currentMap + "\n",
+    " Spawn: " + streakingBox.spawnY + "\n",
+    " Ground: " + streakingBox.constraint_y2 + "\n",
+    " Prestige: " + prestige.x + " " + prestige.y + " " + prestige.z + "\n",
+    " Items: " + items.x + " " + items.y + " " + items.z + "\n",
+    " Upgrades: " + upgrades.x + " " + upgrades.y + " " + upgrades.z, + "\n",
+    " Streaking Box:\n" + streakingBox.constraint_x1 + "\n" + streakingBox.constraint_x2 + "\n" + streakingBox.constraint_y1 + "\n" + streakingBox.constraint_y2 + "\n" + streakingBox.constraint_z1 + "\n" + streakingBox.constraint_z2
     ]
     return mapInfo;
 }
 
-
-// Holiday Auto Grinder -->
 function dist_mid() {
     const distance = Math.floor(Math.sqrt(
     Player.getPlayer().getPos()?.x ** 2 + Player.getPlayer().getPos()?.z ** 2))
     return distance
 }
 
-function dist_player() {
-    //TODO: distance player
-    var loc = World.getLoadedPlayer
-}
-function get_closest() {
-    var list = World.getLoadedPlayers().toArray();
-    var nearest = DOUBLE.MAX_VALUE;
-    for (i =0; i < list.length; i++) {
-        var distance = dist_player(list[i].loc);
-        if (distance >= nearest) continue;
-        nearest = distance;
-    }
-    return nearest;
+function inSpawn() {
+    return posY > streakingBox.spawnY && posX < 22 && posX > -22 && posZ < 22 && posZ > -22;
 }
 
-function getBotState(posX, posY, posZ) {
-    if (World.isWorldLoaded() && World.getDimension() !== "minecraft:the_end") {
-        var area = World.getScoreboards().getCurrentScoreboard()?.getName()
-        var botwrld = area?.toString()
-        if (botwrld?.includes("Pit", 0)) {
-            // bot is in pit
-            GlobalVars.putBoolean("isPit", true)
-        }
-        if (botwrld?.includes("MainScoreboard", 0) || botwrld?.includes("Prototype", 0)) {
-            //bot is in hub
-            GlobalVars.putBoolean("isPit", false)
-            var countdown = Math.floor((GlobalVars.getObject("waitPlay") - Time.time()) / 1000)
-            if (countdown >= 1) {
-            Chat.log("\u00A78[\u00A7cCMD\u00A78]\u00A7a "
-            + (Math.floor(countdown)))
-            Client.waitTick(15)
-            }
-            if (GlobalVars.getObject("waitPlay") < Time.time()) {
-                // this is a little glitchy so we also need to update the cooldown
-                GlobalVars.putObject("waitPlay", (Time.time() + 9000))
-                GlobalVars.putObject("waitHub", (Time.time() + 9000))
-                Chat.say("/play pit")
-                Chat.log("\u00A7aNo thanks, I like the pit better")
-            }
-        }
-    }
-    else {
-        GlobalVars.putBoolean("isPit", false)
-    }      
-    if (World.isWorldLoaded() && World.getDimension() == "minecraft:the_end") {
-        //bot is in limbo
-        var countdown = Math.floor((GlobalVars.getObject("waitHub") - Time.time()) / 1000)
-        if (countdown >= 1) {
-        Chat.log("\u00A78[\u00A7cCMD\u00A78]\u00A76 "
-        + (Math.floor(countdown)))
-        Client.waitTick(15)
-        }
-        if (GlobalVars.getObject("waitHub") < Time.time()) {
-            GlobalVars.putObject("waitHub", (Time.time() + 9000))
-            GlobalVars.putObject("waitPlay", (Time.time() + 9000))
-            Chat.say("/hub")
-        }
-    }
-    else if (GlobalVars.getBoolean("majorStop")) {
-        var majorCD = Math.floor((GlobalVars.getObject("endTime") - Time.time()) * 0.001)
-        KeyBind.key(17, false)
-        if (majorCD >= 1) {
-            Chat.log("\u00A78[\u00A7bMajor Event\u00A78]\u00A76 " + majorCD)
-            Chat.say(".toggle aim-assist off")
-        }
-        else {
-            GlobalVars.putBoolean("majorStop", false)
-            Chat.log("\u00A78[\u00A7cMajor Event\u00A78] \u00A7aEnded")
-        }
-    Client.waitTick(80)
-    }
-    else if (posX > 20 || posX < -20 || posZ > 20 || posZ < -20)
-        {
-        if (GlobalVars.getBoolean("isPit"))
-            {
-            Chat.log("\u00A78[\u00A7cCMD\u00A78] \u00A74Exited")
-            Client.waitTick(3)
-            KeyBind.key(17, false)
-            Client.waitTick(2)
-            Chat.say("/oof")
-            Client.waitTick(25) //wait before doing anything
-            }
-        }
-    else if (posY < mapHeight)
-        {
-        //Chat.log("In Bounding Box!")
-        KeyBind.key(17, true)
-        if (Math.random() > 0.77)
-            {
-            JsMacros.runScript("Jump.js")
-            }
-        // here we need to use a cubic expression to determine if the bot should look back to middle or not
-        if (Math.random() * 2050 < (Math.abs(posX) ** 3) //reccomended to leave between 2000 - 6000
-        || Math.random() * 2050 < (Math.abs(posZ) ** 3))
-            {
-            JsMacros.runScript("Smooth Look.js")
-            //Chat.log('\u00a7cLooked')
-            }
-        if (Math.random() > 0.98 && sneak)
-            {
-            JsMacros.runScript("Sneak.js")
-            }
-        }
-    else
-        {
-        KeyBind.key(17, false)
-        //Chat.log("Bot is in spawn.")
-        JsMacros.runScript("Smooth Look.js")
-        JsMacros.runScript("Quality.js")
-        Client.waitTick(6) // look at mid before doing anything
-        KeyBind.key(17, true)
-        while (World.isWorldLoaded() && dist_mid() > 5 && GlobalVars.getBoolean("ToggleScript")
-        && dist_mid() < 30) // check if we are in spawn or script gets stopped
-            {
-            if (GlobalVars.getDouble("midnons") < minimum
-            || GlobalVars.getDouble("midquality") < quality) {
-                if (GlobalVars.getObject("waitPlay") < Time.time() && finder) {
-                    KeyBind.key(17, false)
-                    Client.waitTick(4)
-                    GlobalVars.putObject("waitPlay", (Time.time() + 8500))
-                    Chat.say("/play pit")
-                }
-            }
-            //Chat.log('distance: ' + dist_mid())
-            JsMacros.runScript("Smooth Look.js")
-            KeyBind.key(17, true)
-            if (dist_mid() >= 9)
-                {
-                JsMacros.runScript("Jump.js")
-                }
-            Time.sleep(250)
-            }
-        }
+function inStreakingBox() {
+    return posX < streakingBox.constraint_x1 && posX > streakingBox.constraint_x2 && posZ < streakingBox.constraint_z1 && posZ > streakingBox.constraint_z2 && posY < streakingBox.constraint_y1 && posY > streakingBox.constraint_y2;
 }
-// Enable -->
-const reverse = !GlobalVars.getBoolean("ToggleScript");
-GlobalVars.putBoolean("ToggleScript", reverse);
-if (reverse) {
-    Chat.log("Holibot Enabled")
-    JsMacros.runScript("Auto Click.js")
-    } 
-    else
-    {
-        KeyBind.key(17, false)
-        Client.waitTick(3)
-        Chat.log("Holibot Disabled")
-        JsMacros.runScript("Auto Click.js")
-        Time.sleep(3000)
-        KeyBind.key(17, false)
+
+function getTarget() {
+    const middle = {x: 0, y: streakingBox.spawnY, z: 0};
+    const me = Player.getPlayer();
+    const px = me.getX(), py = me.getY(), pz = me.getZ();
+
+    if (inSpawn()) return middle;
+    
+    const online = World.getLoadedPlayers().toArray().filter(p => {
+        if (p.getName() === me.getName()) return false;
+
+        const x = p.getX(), y = p.getY(), z = p.getZ();
+        const withinBox =
+            x >= streakingBox.constraint_x1 && x <= streakingBox.constraint_x2 &&
+            y >= streakingBox.constraint_y1 && y <= streakingBox.constraint_y2 &&
+            z >= streakingBox.constraint_z1 && z <= streakingBox.constraint_z2;
+
+        const verticalOk = Math.abs(y - py) <= 1.5;
+
+        return withinBox && verticalOk;
+    });
+
+    if (online.length === 0) return null;
+
+    online.sort((a, b) => {
+        const da = Math.hypot(a.getX() - px, a.getY() - py, a.getZ() - pz);
+        const db = Math.hypot(b.getX() - px, b.getY() - py, b.getZ() - pz);
+        return da - db;
+    });
+
+    const target = online[0];
+    return {
+        x: target.getX(),
+        y: target.getY() + target.getEyeHeight(),
+        z: target.getZ()
+    };
+}
+
+function lookAtTarget({x, y, z}) {
+    const me = Player.getPlayer();
+    const px = me.getX(), py = me.getY(), pz = me.getZ();
+
+    // Calculate raw angles
+    const dx = x - px;
+    const dy = y - (py + me.getEyeHeight());
+    const dz = z - pz;
+
+    const distXZ = Math.sqrt(dx * dx + dz * dz);
+    const targetYaw = -Math.atan2(dx, dz) * (180 / Math.PI);
+    const targetPitch = -Math.atan2(dy, distXZ) * (180 / Math.PI);
+
+    let currentYaw = me.getYaw();
+    let currentPitch = me.getPitch();
+
+    // Total angular distance
+    const yawDelta = Math.abs(targetYaw - currentYaw);
+    const pitchDelta = Math.abs(targetPitch - currentPitch);
+    const totalDelta = yawDelta + pitchDelta;
+
+    // Delay based on angular effort
+    const scaledDelay = Math.min(Math.ceil(totalDelta / 10), 20); // max 20 ticks
+    const delayMs = scaledDelay * 50; // 1 tick = 50ms
+
+    // Interpolation loop
+    for (let i = 0; i < 10; i++) {
+        // Randomized aim speed per iteration
+        const aimSpeed = 0.1 + Math.random() * 0.2;
+
+        // Recalculate deltas
+        const yawDiff = targetYaw - currentYaw;
+        const pitchDiff = targetPitch - currentPitch;
+
+        // Apply interpolation with noise
+        const noiseYaw = (Math.random() * 2 - 1) * 0.11;
+        const noisePitch = (Math.random() * 2 - 1) * 0.08;
+
+        currentYaw += yawDiff * aimSpeed + noiseYaw;
+        currentPitch += pitchDiff * aimSpeed + noisePitch;
+
+        me.lookAt(currentYaw, currentPitch);
+
+        Time.sleep(delayMs);
     }
-while (GlobalVars.getBoolean("ToggleScript")) {
-    if (World.isWorldLoaded()) {
-        var posX = Player.getPlayer().getPos()?.x
-        var posY = Player.getPlayer().getPos()?.y
-        var posZ = Player.getPlayer().getPos()?.z
-        var currentTime = Time.time()
-        //if (posX) {
-        getBotState(posX, posY, posZ)
-        //}
+}
+
+function getBotState() {
+    const pos = Player.getPlayer().getPos();
+    posX = pos?.x;
+    posY = pos?.y;
+    posZ = pos?.z;
+    
+    if (inStreakingBox() === true) {
+        locationStatus = "[Streaking Box]";
+        lookAtTarget(getTarget());
+        startStreaking();
     }
-    Client.waitTick(5); // wait 0.25 seconds (synchronized to client ticks)
+    else if (inSpawn() === true) {
+        locationStatus = "[Spawn]";
+        stopStreaking();
+        lookAtTarget(getTarget());
+        Client.waitTick(30); // when respawn add some delay to give the bot time to look at middle.
+        startStreaking();
+    }
+    else if (inSpawn() === false && inStreakingBox() === false) {
+        locationStatus = "[Down and outside bounds]";
+        stopStreaking();
+        aimTickDelay = Math.ceil(Math.random() * 20);
+        Chat.say("/oof");
+        Client.waitTick(1);
+    }
+    
+    Chat.actionbar(locationStatus + " Distance to Middle: " + dist_mid());
+}
+
+function startStreaking() {
+    KeyBind.pressKeyBind("key.forward");
+}
+
+function stopStreaking() {
+    KeyBind.releaseKeyBind("key.forward");
 }
