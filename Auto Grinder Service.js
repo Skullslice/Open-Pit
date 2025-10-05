@@ -13,6 +13,49 @@ var posZ = undefined;
 var aimTickDelay = 0;
 var commandTickCooldown = 0
 
+let autoclicker = {
+    enabled: false,
+    cpsMin: 6,
+    cpsMax: 12,
+    amplitude: 1,
+    phase: 0,
+    tickCounter: 0,
+    listenerId: null
+};
+
+function startClicker() {
+    if (autoclicker.enabled) return;
+    autoclicker.enabled = true;
+
+    autoclicker.listenerId = JsMacros.on("Tick", JavaWrapper.methodToJava(() => {
+        autoclicker.tickCounter++;
+
+        const t = Time.time();
+        const cps = autoclicker.cpsMin + Math.random() * (autoclicker.cpsMax - autoclicker.cpsMin);
+        const baseFreq = 0.0005;
+        const freq = baseFreq * cps;
+        const noise = Math.sin(t * freq + autoclicker.phase) * autoclicker.amplitude;
+
+        const intervalMs = Math.max(1000 / cps + noise * 100, 10);
+        const intervalTicks = Math.floor(intervalMs / 50); // 50ms per tick
+
+        if (autoclicker.tickCounter >= intervalTicks) {
+            KeyBind.pressKeyBind("key.attack");
+            autoclicker.tickCounter = 0;
+        }
+    }));
+}
+
+function stopClicker() {
+    autoclicker.enabled = false;
+    autoclicker.tickCounter = 0;
+    if (autoclicker.listenerId) {
+        JsMacros.off(autoclicker.listenerId);
+        autoclicker.listenerId = null;
+        KeyBind.releaseKeyBind("key.attack");
+    }
+}
+
 JsMacros.on("Tick", JavaWrapper.methodToJava(event => {
     if (!World.isWorldLoaded()) return;
     if (streakingBox.spawnY === undefined) {
@@ -21,8 +64,8 @@ JsMacros.on("Tick", JavaWrapper.methodToJava(event => {
     }
     
     if (!enabled) return;
+    if (commandTickCooldown >= 0) commandTickCooldown--;
     
-    commandTickCooldown--;
     getBotState();
     
     if (aimTickDelay > 0) {
@@ -54,6 +97,8 @@ JsMacros.on("Key", JavaWrapper.methodToJava( event => {
         if (enabled) {
             Chat.actionbar("started");
         } else {
+            stopStreaking();
+            stopClicker();
             Chat.actionbar("stopped");
         }
     }
@@ -82,6 +127,7 @@ function getMap() {
     var ogmap = World.getBlock(-13, 114, 7)?.getId().toString() == "minecraft:ender_chest";
     var seasons = World.getBlock(-12, 114, 5)?.getId().toString() == "minecraft:ender_chest";
     var genesis = World.getBlock(0, 0, 0)?.getId().toString() == "minecraft:ender_chest";
+    var harrys = World.getBlock(-13, 114, 4)?.getId().toString() == "minecraft:ender_chest";
     var limbo = World.getBlock(-21, 33, 23)?.getId().toString() == "minecraft:torch" && World.getBlock(-21, 33, 19)?.getId().toString() == "minecraft:torch";
     var hypixelHub = World?.getScoreboards()?.getCurrentScoreboard()?.getName()?.includes("MainScoreboard");
     
@@ -152,6 +198,19 @@ function getMap() {
         streakingBox.constraint_y2 = 80
         streakingBox.spawnY = 113
     }
+    else if (harrys) {
+        currentMap = "Sandbox"
+        prestige = {x: 0, y: 0, z: 0}
+        items = {x: 0, y: 0, z: 0}
+        upgrades = {x: 0, y: 0, z: 0}
+        streakingBox.constraint_x1 = 15
+        streakingBox.constraint_x2 = -15
+        streakingBox.constraint_z1 = 15
+        streakingBox.constraint_z2 = -15
+        streakingBox.constraint_y1 = 112
+        streakingBox.constraint_y2 = 81
+        streakingBox.spawnY = 112
+    }
     else if (hypixelHub) {
         currentMap = "Hypixel Hub";
         prestige = {x: 0, y: 0, z: 0};
@@ -218,50 +277,57 @@ function inStreakingBox() {
     return posX < streakingBox.constraint_x1 && posX > streakingBox.constraint_x2 && posZ < streakingBox.constraint_z1 && posZ > streakingBox.constraint_z2 && posY < streakingBox.constraint_y1 && posY > streakingBox.constraint_y2;
 }
 
+function normalizeAngle(angle) {
+    while (angle > 180) angle -= 360;
+    while (angle < -180) angle += 360;
+    return angle;
+}
+
 function getTarget() {
     const middle = {x: 0, y: streakingBox.spawnY, z: 0};
     const me = Player.getPlayer();
-    const px = me.getX(), py = me.getY(), pz = me.getZ();
+    //Chat.log(Player.getPlayer().getName());
+    const px = me.getPos().x, py = me.getPos().y, pz = me.getPos().z;
 
     if (inSpawn()) return middle;
     
-    const online = World.getLoadedPlayers().toArray().filter(p => {
-        if (p.getName() === me.getName()) return false;
-
-        const x = p.getX(), y = p.getY(), z = p.getZ();
+    const online = World.getEntities().toArray().filter(p => {
+        const x = p.getPos().x, y = p.getPos().y, z = p.getPos().z;
         const withinBox =
-            x >= streakingBox.constraint_x1 && x <= streakingBox.constraint_x2 &&
-            y >= streakingBox.constraint_y1 && y <= streakingBox.constraint_y2 &&
-            z >= streakingBox.constraint_z1 && z <= streakingBox.constraint_z2;
-
-        const verticalOk = Math.abs(y - py) <= 1.5;
-
-        return withinBox && verticalOk;
+            x < streakingBox.constraint_x1 && x > streakingBox.constraint_x2 &&
+            y < streakingBox.constraint_y1 && y > streakingBox.constraint_y2 &&
+            z < streakingBox.constraint_z1 && z > streakingBox.constraint_z2;
+        return withinBox;
     });
-
-    if (online.length === 0) return null;
+    online.splice(0, 1); //remove self from targets.
+    if (online.length === 0) {
+        enabled = !enabled;
+        Chat.log("Stopping due to lonliness");
+        return {x: 0, y: py, z: 0};
+    }
 
     online.sort((a, b) => {
-        const da = Math.hypot(a.getX() - px, a.getY() - py, a.getZ() - pz);
-        const db = Math.hypot(b.getX() - px, b.getY() - py, b.getZ() - pz);
+        const da = Math.hypot(a.getPos().x - px, a.getPos().y - py, a.getPos().z - pz);
+        const db = Math.hypot(b.getPos().x - px, b.getPos().y - py, b.getPos().z - pz);
         return da - db;
     });
 
     const target = online[0];
+    //Chat.log(target.getName());
     return {
-        x: target.getX(),
-        y: target.getY() + target.getEyeHeight(),
-        z: target.getZ()
+        x: target.getPos().x,
+        y: target.getPos().y + 0.38,
+        z: target.getPos().z
     };
 }
 
 function lookAtTarget({x, y, z}) {
     const me = Player.getPlayer();
-    const px = me.getX(), py = me.getY(), pz = me.getZ();
+    const px = me.getPos().x, py = me.getPos().y, pz = me.getPos().z;
 
     // Calculate raw angles
     const dx = x - px;
-    const dy = y - (py + me.getEyeHeight());
+    const dy = y - (py + 0.38);
     const dz = z - pz;
 
     const distXZ = Math.sqrt(dx * dx + dz * dz);
@@ -277,57 +343,61 @@ function lookAtTarget({x, y, z}) {
     const totalDelta = yawDelta + pitchDelta;
 
     // Delay based on angular effort
-    const scaledDelay = Math.min(Math.ceil(totalDelta / 10), 20); // max 20 ticks
-    const delayMs = scaledDelay * 50; // 1 tick = 50ms
+    const scaledDelay = Math.min(Math.ceil(totalDelta / 10), 15);
 
     // Interpolation loop
     for (let i = 0; i < 10; i++) {
-        // Randomized aim speed per iteration
-        const aimSpeed = 0.1 + Math.random() * 0.2;
+        currentYaw = me.getYaw();
+        currentPitch = me.getPitch();
 
-        // Recalculate deltas
-        const yawDiff = targetYaw - currentYaw;
+        const yawDiff = normalizeAngle(targetYaw - currentYaw);
         const pitchDiff = targetPitch - currentPitch;
 
+        if (Math.abs(yawDiff) < 4.5 && Math.abs(pitchDiff) < 1) break;
+
+        if (aimTickDelay > 0) break;
+        // Randomized aim speed per iteration
+        const aimSpeed = 0.01 + Math.random() * 0.04;
+
         // Apply interpolation with noise
-        const noiseYaw = (Math.random() * 2 - 1) * 0.11;
+        const noiseYaw = (Math.random() * 2 - 1) * 0.01;
         const noisePitch = (Math.random() * 2 - 1) * 0.08;
 
         currentYaw += yawDiff * aimSpeed + noiseYaw;
         currentPitch += pitchDiff * aimSpeed + noisePitch;
 
-        me.lookAt(currentYaw, currentPitch);
+        me.lookAt(currentYaw, currentPitch < 2 ? 2 + Math.random() * 0.86 : currentPitch);
 
-        Time.sleep(delayMs);
+        Time.sleep(Math.ceil(aimSpeed) * scaledDelay);
     }
+    if (aimTickDelay < 1) aimTickDelay += 1;
 }
 
 function getBotState() {
-    const pos = Player.getPlayer().getPos();
-    posX = pos?.x;
-    posY = pos?.y;
-    posZ = pos?.z;
+    posX = Player.getPlayer().getPos().x;
+    posY = Player.getPlayer().getPos().y;
+    posZ = Player.getPlayer().getPos().z;
     
     if (inStreakingBox() === true) {
         locationStatus = "[Streaking Box]";
-        lookAtTarget(getTarget());
+        //lookAtTarget(getTarget());
         startStreaking();
+        startClicker();
     }
     else if (inSpawn() === true) {
         locationStatus = "[Spawn]";
-        stopStreaking();
-        lookAtTarget(getTarget());
-        Client.waitTick(30); // when respawn add some delay to give the bot time to look at middle.
+        //lookAtTarget(getTarget());
         startStreaking();
+        stopClicker();
     }
     else if (inSpawn() === false && inStreakingBox() === false) {
         locationStatus = "[Down and outside bounds]";
         stopStreaking();
-        aimTickDelay = Math.ceil(Math.random() * 20);
+        aimTickDelay = 10;
         oof();
     }
     
-    Chat.actionbar(locationStatus + " Distance to Middle: " + dist_mid());
+    Chat.actionbar(locationStatus + " Distance to Middle: " + dist_mid() + " " + currentMap);
 }
 
 function startStreaking() {
