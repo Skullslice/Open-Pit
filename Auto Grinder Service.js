@@ -9,6 +9,7 @@ var locationStatus = undefined;
 var posX = undefined;
 var posY = undefined;
 var posZ = undefined;
+var movementDelay = 0;
 
 var aimTickDelay = 0;
 var commandTickCooldown = 0
@@ -141,7 +142,7 @@ function getMap() {
         streakingBox.constraint_x2 = -15
         streakingBox.constraint_z1 = 15
         streakingBox.constraint_z2 = -15
-        streakingBox.constraint_y1 = 86
+        streakingBox.constraint_y1 = 113
         streakingBox.constraint_y2 = 80
         streakingBox.spawnY = 113
         
@@ -155,7 +156,7 @@ function getMap() {
         streakingBox.constraint_x2 = -15
         streakingBox.constraint_z1 = 15
         streakingBox.constraint_z2 = -15
-        streakingBox.constraint_y1 = 86
+        streakingBox.constraint_y1 = 113
         streakingBox.constraint_y2 = 80
         streakingBox.spawnY = 113
     }
@@ -168,7 +169,7 @@ function getMap() {
         streakingBox.constraint_x2 = -15
         streakingBox.constraint_z1 = 15
         streakingBox.constraint_z2 = -15
-        streakingBox.constraint_y1 = 86
+        streakingBox.constraint_y1 = 113
         streakingBox.constraint_y2 = 80
         streakingBox.spawnY = 113
     }
@@ -181,7 +182,7 @@ function getMap() {
         streakingBox.constraint_x2 = -15
         streakingBox.constraint_z1 = 15
         streakingBox.constraint_z2 = -15
-        streakingBox.constraint_y1 = 86
+        streakingBox.constraint_y1 = 90
         streakingBox.constraint_y2 = 80
         streakingBox.spawnY = 90
     }
@@ -194,7 +195,7 @@ function getMap() {
         streakingBox.constraint_x2 = -15
         streakingBox.constraint_z1 = 15
         streakingBox.constraint_z2 = -15
-        streakingBox.constraint_y1 = 86
+        streakingBox.constraint_y1 = 113
         streakingBox.constraint_y2 = 80
         streakingBox.spawnY = 113
     }
@@ -385,6 +386,10 @@ function getBotState() {
         startClicker();
     }
     else if (inSpawn() === true) {
+        if (locationStatus == "[Down and outside bounds]" || locationStatus == "[Streaking Box]") {
+            stopStreaking();
+            movementDelay += 30;
+        }
         locationStatus = "[Spawn]";
         //lookAtTarget(getTarget());
         startStreaking();
@@ -401,6 +406,10 @@ function getBotState() {
 }
 
 function startStreaking() {
+    if (movementDelay > 0) {
+        movementDelay--;
+        return;
+    }
     KeyBind.pressKeyBind("key.forward");
 }
 
