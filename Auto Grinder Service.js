@@ -5,7 +5,7 @@
 [===================================]
 
 */
-
+const Thread = Java.type("java.lang.Thread");
 var enabled = false; //the bot should be off when cluient starts.
 var sneak = true; //occasionally sneaks in middle.
 var bow = true; //occasionally uses the bow and aims and shoots.
@@ -93,6 +93,7 @@ function getMap() {
     var seasons = World.getBlock(-12, 114, 5)?.getId().toString() == "minecraft:ender_chest";
     var genesis = World.getBlock(0, 0, 0)?.getId().toString() == "minecraft:ender_chest";
     var harrys = World.getBlock(-13, 114, 4)?.getId().toString() == "minecraft:ender_chest";
+    var harrys2 = World.getBlock(12, 95, 6)?.getId().toString() == "minecraft:ender_chest";
     var limbo = World.getBlock(-21, 33, 23)?.getId().toString() == "minecraft:torch" && World.getBlock(-21, 33, 19)?.getId().toString() == "minecraft:torch";
     var hypixelHub = World?.getScoreboards()?.getCurrentScoreboard()?.getName()?.includes("MainScoreboard");
     
@@ -175,6 +176,19 @@ function getMap() {
         streakingBox.constraint_y1 = 112
         streakingBox.constraint_y2 = 81
         streakingBox.spawnY = 112
+    }
+    else if (harrys2) {
+        currentMap = "Sandbox2"
+        prestige = {x: 0, y: 0, z: 0}
+        items = {x: 0, y: 0, z: 0}
+        upgrades = {x: 0, y: 0, z: 0}
+        streakingBox.constraint_x1 = 15
+        streakingBox.constraint_x2 = -15
+        streakingBox.constraint_z1 = 15
+        streakingBox.constraint_z2 = -15
+        streakingBox.constraint_y1 = 93
+        streakingBox.constraint_y2 = 70
+        streakingBox.spawnY = 93
     }
     else if (hypixelHub) {
         currentMap = "Hypixel Hub";
@@ -286,7 +300,7 @@ function getTarget() {
     };
 }
 
-function lookAtTarget({x, y, z}) {
+function lookAtTarget_old({x, y, z}) {
     const me = Player.getPlayer();
     const px = me.getPos().x, py = me.getPos().y, pz = me.getPos().z;
 
@@ -326,7 +340,7 @@ function lookAtTarget({x, y, z}) {
 
         // Apply interpolation with noise
         const noiseYaw = (Math.random() * 2 - 1) * 0.01;
-        const noisePitch = (Math.random() * 2 - 1) * 0.08;
+        const noisePitch = (Math.random() * 2 - 1) * 0.01;
 
         currentYaw += yawDiff * aimSpeed + noiseYaw;
         currentPitch += pitchDiff * aimSpeed + noisePitch;
@@ -335,7 +349,70 @@ function lookAtTarget({x, y, z}) {
 
         Time.sleep(Math.ceil(aimSpeed) * scaledDelay);
     }
-    if (aimTickDelay < 1) aimTickDelay += 1;
+    if (aimTickDelay < 1) aimTickDelay += Math.ciel(Math.random() * 10); //0.05 - 0.5(s) next aim delay.
+}
+
+let aimThread = null;
+function lookAtTarget(target) {
+    if (aimThread && aimThread.isAlive()) return false;
+    const me = Player.getPlayer();
+    const seed = Math.random() * 1000;
+    const start = Time.time(), duration = 800 + Math.random() * 400;
+
+    const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+    const gaussian = (m = 0, d = 0.01) => {
+        let u = 0, v = 0;
+        while (u === 0) u = Math.random();
+        while (v === 0) v = Math.random();
+        return d * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v) + m;
+    };
+    const ease = t => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+    const skewed = (t, f = 0.002, k = 0.6) => Math.sin(t * f + Math.sin(t * f * k)) * 0.6;
+    const biasedNoise = (currentPitch, now, strength = 0.02) => {
+        const base = Math.sin(now * 0.02 + seed) * strength;
+        const bias = currentPitch < 2 ? (2 - currentPitch) * 0.05 : 0;
+        return base + bias;
+    };
+
+    aimThread = new Thread(JavaWrapper.methodToJava(() => {
+        while (!Thread.interrupted()) {
+            if (aimTickDelay > 0) break;
+            const now = Time.time();
+            const t = Math.min((now - start) / duration, 1);
+            if (t >= 1) {
+                aimThread.interrupt();
+                break;
+            }
+            const {x, y, z} = target;
+            const {x: px, y: py, z: pz} = me.getPos();
+            const dx = x - px, dy = y - (py + 0.38), dz = z - pz;
+            const distXZ = Math.sqrt(dx * dx + dz * dz);
+
+            const yaw = -Math.atan2(dx, dz) * 180 / Math.PI;
+            const pitch = -Math.atan2(dy, distXZ) * 180 / Math.PI;
+
+            const cy = me.getYaw(), cp = me.getPitch();
+            const yd = normalizeAngle(yaw - cy), pd = pitch - cp;
+
+            const eased = ease(t);
+            const baseYaw = cy + yd * eased;
+            const basePitch = cp + pd * eased;
+
+            const finalYaw = baseYaw + gaussian() + Math.sin(now * 0.02 + seed) * 0.02;
+            const finalPitch = clamp(
+                basePitch
+                + gaussian()
+                + biasedNoise(basePitch, now + 100)
+                + skewed(now),
+                -90, 90
+            );
+            me.lookAt(finalYaw, finalPitch);
+            Time.sleep(3 + Math.random() * 4);
+        }
+        aimThread = null;
+    }));
+    aimThread.start();
+    return true;
 }
 
 function getBotState() {
@@ -499,7 +576,6 @@ function waveDelayC() {
     return wave;
 }
 
-const Thread = Java.type("java.lang.Thread");
 let clickThread = null;
 let clickThreadRunning = false;
 
