@@ -6,6 +6,13 @@
 
 */
 const Thread = Java.type("java.lang.Thread");
+
+const keyWhitelist = {
+  "fullscreen": "key.keyboard.f11",
+  "windows": "key.keyboard.left.win",
+  "tablist": "key.keyboard.tab"
+};
+
 var enabled = false; //the bot should be off when cluient starts.
 var sneak = true; //occasionally sneaks in middle.
 var bow = true; //occasionally uses the bow and aims and shoots.
@@ -27,6 +34,7 @@ JsMacros.on("Tick", JavaWrapper.methodToJava(event => {
     if (streakingBox.spawnY === undefined) {
         Client.waitTick(1);
         getMap();
+        return; //prevents the bot from doing anything unless it is a valid pit map.
     }
     
     if (!enabled) return;
@@ -66,6 +74,10 @@ JsMacros.on("Key", JavaWrapper.methodToJava( event => {
             stopStreaking();
             Chat.actionbar("stopped");
         }
+    }
+    else if (enabled && event.action === 1 && !Object.values(keyWhitelist).includes(event.key)) {
+        enabled = !enabled;
+        Chat.log("[Action Cancelled by moving] -> \u00a7d" + event.key);
     }
 }));
 
@@ -385,7 +397,7 @@ function lookAtTarget(target) {
             }
             const {x, y, z} = target;
             const {x: px, y: py, z: pz} = me.getPos();
-            const dx = x - px, dy = y - (py + 0.38), dz = z - pz;
+            const dx = x - px, dy = y - (py + 0.6), dz = z - pz;
             const distXZ = Math.sqrt(dx * dx + dz * dz);
 
             const yaw = -Math.atan2(dx, dz) * 180 / Math.PI;
@@ -473,8 +485,8 @@ function oof() {
 
 const config = {
     enabled: false,
-    min: 2,
-    max: 12,
+    min: 3,
+    max: 10,
     raytraceHitbox: true,
     raytraceDistance: 5
 };
@@ -577,32 +589,42 @@ function waveDelayC() {
 }
 
 let clickThread = null;
-let clickThreadRunning = false;
 
 JsMacros.on("Key", JavaWrapper.methodToJava(event => {
     if (event.key == "key.keyboard.i" && event.action === 1) {
         config.enabled = !config.enabled;
         const windowSize = 1000; // 1 second window
 
-        if (config.enabled && !clickThreadRunning) {
-            clickThreadRunning = true;
+        if (config.enabled) {
             clickThread = new Thread(JavaWrapper.methodToJava(() => {
                 while (config.enabled && !Thread.interrupted()) {
+                    /*
                     if (!inStreakingBox()) {
                         Time.sleep(0);
                         continue;
                     }
+                    */
                     const now = Time.time();
                     randomization.clicks = randomization.clicks.filter(entry => now - entry.time <= windowSize);
                     randomization.cps = (randomization.clicks.length * 1000) / windowSize;
                     click(generateNoiseDelay());
                     Time.sleep(0);
                 }
-                clickThreadRunning = false;
             }));
             clickThread.start();
-        } else if (!config.enabled && clickThread !== null && clickThread.isAlive()) {
+        } else if (!config.enabled) {
             clickThread.interrupt();
+            clickThread = null;
+            KeyBind.releaseKeyBind("key.attack"); //double check to ensure we release the key.
         }
     }
 }));
+
+/*
+
+[===================================]
+[ ----- Rendering and Overlay ----- ]
+[===================================]
+
+*/
+
