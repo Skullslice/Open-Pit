@@ -10,7 +10,12 @@ const Thread = Java.type("java.lang.Thread");
 const keyWhitelist = {
   "fullscreen": "key.keyboard.f11",
   "windows": "key.keyboard.left.win",
-  "tablist": "key.keyboard.tab"
+  "tablist": "key.keyboard.tab",
+  "forward": "key.keyboard.w",
+  "backward": "key.keyboard.s",
+  "left": "key.keyboard.a",
+  "right": "key.keyboard.d",
+  "jump": "key.keyboard.space"
 };
 
 var enabled = false; //the bot should be off when cluient starts.
@@ -38,6 +43,12 @@ JsMacros.on("Tick", JavaWrapper.methodToJava(event => {
     }
     
     if (!enabled) return;
+
+    if (!aimThread || aimThread.isInterrupted() || !aimThread.isAlive()) {
+        aimThread.start(); //start the aim thread one time
+        Chat.log("Aim thread started");
+        }
+
     if (commandTickCooldown >= 0) commandTickCooldown--;
     
     getBotState();
@@ -45,12 +56,6 @@ JsMacros.on("Tick", JavaWrapper.methodToJava(event => {
     if (aimTickDelay > 0) {
         aimTickDelay--;
         return;
-    }
-
-    // Aim logic
-    const target = getTarget();
-    if (target) {
-        lookAtTarget(target);
     }
 }));
 
@@ -77,6 +82,8 @@ JsMacros.on("Key", JavaWrapper.methodToJava( event => {
     }
     else if (enabled && event.action === 1 && !Object.values(keyWhitelist).includes(event.key)) {
         enabled = !enabled;
+        autoclicker.enabled = !autoclicker.enabled;
+        stopStreaking();
         Chat.log("[Action Cancelled by moving] -> \u00a7d" + event.key);
     }
 }));
@@ -105,7 +112,6 @@ function getMap() {
     var seasons = World.getBlock(-12, 114, 5)?.getId().toString() == "minecraft:ender_chest";
     var genesis = World.getBlock(0, 0, 0)?.getId().toString() == "minecraft:ender_chest";
     var harrys = World.getBlock(-13, 114, 4)?.getId().toString() == "minecraft:ender_chest";
-    var harrys2 = World.getBlock(12, 95, 6)?.getId().toString() == "minecraft:ender_chest";
     var limbo = World.getBlock(-21, 33, 23)?.getId().toString() == "minecraft:torch" && World.getBlock(-21, 33, 19)?.getId().toString() == "minecraft:torch";
     var hypixelHub = World?.getScoreboards()?.getCurrentScoreboard()?.getName()?.includes("MainScoreboard");
     
@@ -186,21 +192,8 @@ function getMap() {
         streakingBox.constraint_z1 = 15
         streakingBox.constraint_z2 = -15
         streakingBox.constraint_y1 = 112
-        streakingBox.constraint_y2 = 81
+        streakingBox.constraint_y2 = 26
         streakingBox.spawnY = 112
-    }
-    else if (harrys2) {
-        currentMap = "Sandbox2"
-        prestige = {x: 0, y: 0, z: 0}
-        items = {x: 0, y: 0, z: 0}
-        upgrades = {x: 0, y: 0, z: 0}
-        streakingBox.constraint_x1 = 15
-        streakingBox.constraint_x2 = -15
-        streakingBox.constraint_z1 = 15
-        streakingBox.constraint_z2 = -15
-        streakingBox.constraint_y1 = 93
-        streakingBox.constraint_y2 = 70
-        streakingBox.spawnY = 93
     }
     else if (hypixelHub) {
         currentMap = "Hypixel Hub";
@@ -276,156 +269,144 @@ function normalizeAngle(angle) {
 
 function getTarget() {
     const middle = {x: 0, y: streakingBox.spawnY, z: 0};
-    const me = Player.getPlayer();
-    //Chat.log(Player.getPlayer().getName());
-    const px = me.getPos().x, py = me.getPos().y, pz = me.getPos().z;
+    const player = Player.getPlayer();
+    const px = player.getPos().x, py = player.getPos().y, pz = player.getPos().z;
+    const cyaw = player.getYaw();
 
     if (inSpawn()) return middle;
-    
+
     const online = World.getEntities().toArray().filter(p => {
         const x = p.getPos().x, y = p.getPos().y, z = p.getPos().z;
         const withinBox =
             x < streakingBox.constraint_x1 && x > streakingBox.constraint_x2 &&
             y < streakingBox.constraint_y1 && y > streakingBox.constraint_y2 &&
             z < streakingBox.constraint_z1 && z > streakingBox.constraint_z2;
-        return withinBox;
+        const blacklist = p.getType().toString() === "minecraft:arrow";
+        
+        return withinBox && !blacklist;
     });
-    online.splice(0, 1); //remove self from targets.
+
+    online.splice(0, 1); // remove self from targets
     if (online.length === 0) {
         enabled = !enabled;
         Chat.log("Stopping due to lonliness");
         return {x: 0, y: py, z: 0};
     }
 
+    const yawTo = entity => {
+        const dx = entity.getPos().x - px;
+        const dz = entity.getPos().z - pz;
+        return -Math.atan2(dx, dz) * 180 / Math.PI;
+    };
+    const normalizeAngle = angle => {
+        angle = angle % 360;
+        if (angle > 180) angle -= 360;
+        if (angle < -180) angle += 360;
+        return angle;
+    };
+
     online.sort((a, b) => {
-        const da = Math.hypot(a.getPos().x - px, a.getPos().y - py, a.getPos().z - pz);
-        const db = Math.hypot(b.getPos().x - px, b.getPos().y - py, b.getPos().z - pz);
-        return da - db;
+        const distA = Math.hypot(a.getPos().x - px, a.getPos().z - pz);
+        const distB = Math.hypot(b.getPos().x - px, b.getPos().z - pz);
+
+        const deltaA = distA <= 3.25 ? Math.abs(normalizeAngle(yawTo(a) - cyaw)) : Infinity;
+        const deltaB = distB <= 3.25 ? Math.abs(normalizeAngle(yawTo(b) - cyaw)) : Infinity;
+
+        return deltaA - deltaB;
     });
 
     const target = online[0];
-    //Chat.log(target.getName());
+    //Chat.log(target); //DEBUG target name
     return {
         x: target.getPos().x,
-        y: target.getPos().y + 0.38,
+        y: target.getPos().y,
         z: target.getPos().z
     };
 }
 
-function lookAtTarget_old({x, y, z}) {
-    const me = Player.getPlayer();
-    const px = me.getPos().x, py = me.getPos().y, pz = me.getPos().z;
-
-    // Calculate raw angles
-    const dx = x - px;
-    const dy = y - (py + 0.38);
-    const dz = z - pz;
-
-    const distXZ = Math.sqrt(dx * dx + dz * dz);
-    const targetYaw = -Math.atan2(dx, dz) * (180 / Math.PI);
-    const targetPitch = -Math.atan2(dy, distXZ) * (180 / Math.PI);
-
-    let currentYaw = me.getYaw();
-    let currentPitch = me.getPitch();
-
-    // Total angular distance
-    const yawDelta = Math.abs(targetYaw - currentYaw);
-    const pitchDelta = Math.abs(targetPitch - currentPitch);
-    const totalDelta = yawDelta + pitchDelta;
-
-    // Delay based on angular effort
-    const scaledDelay = Math.min(Math.ceil(totalDelta / 10), 15);
-
-    // Interpolation loop
-    for (let i = 0; i < 10; i++) {
-        currentYaw = me.getYaw();
-        currentPitch = me.getPitch();
-
-        const yawDiff = normalizeAngle(targetYaw - currentYaw);
-        const pitchDiff = targetPitch - currentPitch;
-
-        if (Math.abs(yawDiff) < 4.5 && Math.abs(pitchDiff) < 1) break;
-
-        if (aimTickDelay > 0) break;
-        // Randomized aim speed per iteration
-        const aimSpeed = 0.01 + Math.random() * 0.04;
-
-        // Apply interpolation with noise
-        const noiseYaw = (Math.random() * 2 - 1) * 0.01;
-        const noisePitch = (Math.random() * 2 - 1) * 0.01;
-
-        currentYaw += yawDiff * aimSpeed + noiseYaw;
-        currentPitch += pitchDiff * aimSpeed + noisePitch;
-
-        me.lookAt(currentYaw, currentPitch < 2 ? 2 + Math.random() * 0.86 : currentPitch);
-
-        Time.sleep(Math.ceil(aimSpeed) * scaledDelay);
-    }
-    if (aimTickDelay < 1) aimTickDelay += Math.ciel(Math.random() * 10); //0.05 - 0.5(s) next aim delay.
-}
-
-let aimThread = null;
-function lookAtTarget(target) {
-    if (aimThread && aimThread.isAlive()) return false;
-    const me = Player.getPlayer();
+let aimThread = new Thread(JavaWrapper.methodToJava(() => {
     const seed = Math.random() * 1000;
-    const start = Time.time(), duration = 800 + Math.random() * 400;
-
     const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-    const gaussian = (m = 0, d = 0.01) => {
+    const gaussian = (m = 0, d = 0.008) => {
         let u = 0, v = 0;
         while (u === 0) u = Math.random();
         while (v === 0) v = Math.random();
         return d * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v) + m;
     };
-    const ease = t => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+    const ease = t => t * t * (3 - 2 * t);
     const skewed = (t, f = 0.002, k = 0.6) => Math.sin(t * f + Math.sin(t * f * k)) * 0.6;
     const biasedNoise = (currentPitch, now, strength = 0.02) => {
         const base = Math.sin(now * 0.02 + seed) * strength;
-        const bias = currentPitch < 2 ? (2 - currentPitch) * 0.05 : 0;
+        const bias = currentPitch < 2 ? (2 - currentPitch) * 0.025 : 0;
         return base + bias;
     };
+    const normalizeAngle = angle => {
+        angle = angle % 360;
+        if (angle > 180) angle -= 360;
+        if (angle < -180) angle += 360;
+        return angle;
+    };
 
-    aimThread = new Thread(JavaWrapper.methodToJava(() => {
-        while (!Thread.interrupted()) {
-            if (aimTickDelay > 0) break;
-            const now = Time.time();
-            const t = Math.min((now - start) / duration, 1);
-            if (t >= 1) {
-                aimThread.interrupt();
-                break;
-            }
-            const {x, y, z} = target;
-            const {x: px, y: py, z: pz} = me.getPos();
-            const dx = x - px, dy = y - (py + 0.6), dz = z - pz;
-            const distXZ = Math.sqrt(dx * dx + dz * dz);
+    let virtualYaw = Player.getPlayer().getYaw();
+    let lastTarget = null;
+    let lastUpdate = Time.time();
 
-            const yaw = -Math.atan2(dx, dz) * 180 / Math.PI;
-            const pitch = -Math.atan2(dy, distXZ) * 180 / Math.PI;
+    while (!Thread.interrupted()) {
+        const now = Time.time();
+        const dt = now - lastUpdate;
+        lastUpdate = now;
 
-            const cy = me.getYaw(), cp = me.getPitch();
-            const yd = normalizeAngle(yaw - cy), pd = pitch - cp;
-
-            const eased = ease(t);
-            const baseYaw = cy + yd * eased;
-            const basePitch = cp + pd * eased;
-
-            const finalYaw = baseYaw + gaussian() + Math.sin(now * 0.02 + seed) * 0.02;
-            const finalPitch = clamp(
-                basePitch
-                + gaussian()
-                + biasedNoise(basePitch, now + 100)
-                + skewed(now),
-                -90, 90
-            );
-            me.lookAt(finalYaw, finalPitch);
-            Time.sleep(3 + Math.random() * 4);
+        if (!enabled || Hud.getOpenScreen() !== null || aimTickDelay > 0) {
+            Time.sleep(10);
+            continue;
         }
-        aimThread = null;
-    }));
-    aimThread.start();
-    return true;
-}
+
+        const target = getTarget(); // must return {x, y, z}
+        if (!target) {
+            Time.sleep(10);
+            continue;
+        }
+
+        lastTarget = target;
+
+        const player = Player.getPlayer();
+        if (!player) {
+            Time.sleep(10);
+            continue;
+        }
+
+        const {x, y, z} = target;
+        const {x: px, y: py, z: pz} = player.getPos();
+        const dx = x - px, dy = y - (py + 0.6), dz = z - pz;
+        const distXZ = Math.sqrt(dx * dx + dz * dz);
+
+        const targetYaw = -Math.atan2(dx, dz) * 180 / Math.PI;
+        const targetPitch = -Math.atan2(dy, distXZ) * 180 / Math.PI;
+
+        const yawDelta = normalizeAngle(targetYaw - virtualYaw);
+        virtualYaw += clamp(yawDelta * 0.1, -4.4, 4.4);
+
+        const cp = player.getPitch();
+        const pd = targetPitch - cp;
+
+        const eased = ease(clamp(dt / 100, 0, 1));
+        const pitchDamp = clamp(distXZ * 0.05, 0.1, 1.0);
+        const basePitchRaw = cp + pd * eased * 0.15 * pitchDamp;
+        const basePitch = clamp(basePitchRaw, 1, 24);
+
+        const finalYaw = virtualYaw + gaussian() + Math.sin(now * 0.02 + seed) * 0.02;
+        const finalPitch = clamp(
+            basePitch
+            + gaussian()
+            + biasedNoise(basePitch, now + 100)
+            + skewed(now),
+            -90, 90
+        );
+
+        player.lookAt(finalYaw, finalPitch);
+        Time.sleep(Math.ceil(2 + Math.random() * 2));
+    }
+}));
 
 function getBotState() {
     posX = Player.getPlayer().getPos().x;
@@ -483,10 +464,10 @@ function oof() {
 
 */
 
-const config = {
+const autoclicker = {
     enabled: false,
-    min: 3,
-    max: 10,
+    min: 2,
+    max: 14,
     raytraceHitbox: true,
     raytraceDistance: 5
 };
@@ -506,16 +487,16 @@ const randomization = {
 };
 
 function generateNoiseDelay() {
-    var delay = 1000 / (Math.floor(Math.random() * (config.max - config.min) + config.min));
+    var delay = 1000 / (Math.floor(Math.random() * (autoclicker.max - autoclicker.min) + autoclicker.min));
     delay += (waveDelayA() + waveDelayB() + waveDelayC()) / 3;
-    while (delay < (1000 / (1 + config.max))) delay += Math.abs(waveDelayA() + 1);
+    while (delay < (1000 / (1 + autoclicker.max))) delay += Math.abs(waveDelayA() + 1);
     return delay;
 }
 
 function click(delay) {
     if (Hud.getOpenScreen() !== null) return false;
     try {
-        if (Player.rayTraceEntity(config.raytraceDistance) === null && config.raytraceHitbox) return false;
+        if (Player.rayTraceEntity(autoclicker.raytraceDistance) === null && autoclicker.raytraceHitbox) return false;
     } catch (e) {
         //Chat.log("It does throw ConcurrentModificationException but we can ignore it.");
     }
@@ -543,7 +524,7 @@ function waveDelayA() {
 
     const wave = Math.sin(2 * Math.PI * skewedPhase) *
         randomization.waveHeightA *
-        (config.min - config.max);
+        (autoclicker.min - autoclicker.max);
 
     return wave;
 }
@@ -563,7 +544,7 @@ function waveDelayB() {
 
     const wave = Math.sin(2 * Math.PI * skewedPhase) *
         randomization.waveHeightB *
-        (config.min - config.max);
+        (autoclicker.min - autoclicker.max);
 
     return wave;
 }
@@ -583,7 +564,7 @@ function waveDelayC() {
 
     const wave = Math.sin(2 * Math.PI * skewedPhase) *
         randomization.waveHeightC *
-        (config.min - config.max);
+        (autoclicker.min - autoclicker.max);
 
     return wave;
 }
@@ -592,18 +573,18 @@ let clickThread = null;
 
 JsMacros.on("Key", JavaWrapper.methodToJava(event => {
     if (event.key == "key.keyboard.i" && event.action === 1) {
-        config.enabled = !config.enabled;
+        autoclicker.enabled = !autoclicker.enabled;
         const windowSize = 1000; // 1 second window
 
-        if (config.enabled) {
+        if (autoclicker.enabled) {
             clickThread = new Thread(JavaWrapper.methodToJava(() => {
-                while (config.enabled && !Thread.interrupted()) {
-                    /*
+                while (autoclicker.enabled && !Thread.interrupted()) {
+                    
                     if (!inStreakingBox()) {
                         Time.sleep(0);
                         continue;
                     }
-                    */
+                    
                     const now = Time.time();
                     randomization.clicks = randomization.clicks.filter(entry => now - entry.time <= windowSize);
                     randomization.cps = (randomization.clicks.length * 1000) / windowSize;
@@ -612,7 +593,7 @@ JsMacros.on("Key", JavaWrapper.methodToJava(event => {
                 }
             }));
             clickThread.start();
-        } else if (!config.enabled) {
+        } else if (!autoclicker.enabled) {
             clickThread.interrupt();
             clickThread = null;
             KeyBind.releaseKeyBind("key.attack"); //double check to ensure we release the key.
