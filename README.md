@@ -1,9 +1,14 @@
-===== Install JS Macros mod on your version of choice =====
+Required Mods:
 
-The default button for the jsmacros gui is "k"
+JS Macros, ViaFabricPlus, Fabric API, Fabric Loader.
+https://fabricmc.net/
+https://modrinth.com/mod/fabric-api
+https://modrinth.com/mod/viafabricplus
+https://modrinth.com/mod/jsmacros
 
-Documentation: https://jsmacros.wagyourtail.xyz/
-
-Discord: https://discord.gg/MUXYJJxTAa
-
-I am not a part of the jsmacros team and these scripts are provided as-is with no implied warranty or guarantees. Do not use these scripts on big servers the anticheat will flag it without proper randomization, you have been warned.
+-> Open the gui with "k"
+-> services tab
+-> click the "+" button and name the service whatever you want.
+-> copy and paste the code from "Auto Grinder Service.js" into the editor!
+-> press both the red buttons to enable the script.
+-> thats it! press "I" to start and stop it.
