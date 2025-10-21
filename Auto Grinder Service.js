@@ -18,6 +18,31 @@ const keyWhitelist = {
   "jump": "key.keyboard.space"
 };
 
+/* 
+
+[========================]
+[ ----- Anti Stuck ----- ]
+[========================]
+
+*/
+
+const antiStuck = {
+    stuck: false,
+    ticks: 100,
+    window: [],
+    runCheck: () => {
+        if (antiStuck.window.length >= antiStuck.ticks) {
+            const first = antiStuck.window[0];
+            antiStuck.stuck = antiStuck.window.every(
+                ({ posX, posZ, posY }) => posX === first.posX && posZ === first.posZ && posY === first.posY
+            );
+            antiStuck.window.shift();
+        }
+        antiStuck.window.push({ posX, posZ, posY });
+        if (antiStuck.stuck) oof();
+    },
+};
+
 var enabled = false; //the bot should be off when cluient starts.
 var sneak = true; //occasionally sneaks in middle.
 var bow = true; //occasionally uses the bow and aims and shoots.
@@ -36,21 +61,24 @@ var commandTickCooldown = 0
 
 JsMacros.on("Tick", JavaWrapper.methodToJava(event => {
     if (!World.isWorldLoaded()) return;
+    overlay.renderHud();
+    overlay.renderTargetBox();
+    
     if (streakingBox.spawnY === undefined) {
         Client.waitTick(1);
         getMap();
         return; //prevents the bot from doing anything unless it is a valid pit map.
     }
     
-    if (!enabled) return;
+    if (!enabled || Hud.getOpenScreen() !== null) return;
 
     if (!aimThread || aimThread.isInterrupted() || !aimThread.isAlive()) {
         aimThread.start(); //start the aim thread one time
         Chat.log("Aim thread started");
-        }
+    }
 
     if (commandTickCooldown >= 0) commandTickCooldown--;
-    
+
     getBotState();
     
     if (aimTickDelay > 0) {
@@ -63,6 +91,7 @@ JsMacros.on("Tick", JavaWrapper.methodToJava(event => {
 JsMacros.on("Disconnect", JavaWrapper.methodToJava( event => {
     locationStatus = undefined;
     currentMap = null;
+    streakingBox.spawnY = undefined;
     
 }));
 
@@ -81,8 +110,8 @@ JsMacros.on("Key", JavaWrapper.methodToJava( event => {
         }
     }
     else if (enabled && event.action === 1 && !Object.values(keyWhitelist).includes(event.key)) {
-        enabled = !enabled;
-        autoclicker.enabled = !autoclicker.enabled;
+        enabled = false;
+        autoclicker.enabled = false;
         stopStreaking();
         Chat.log("[Action Cancelled by moving] -> \u00a7d" + event.key);
     }
@@ -107,11 +136,11 @@ var mapInfo = [];
 function getMap() {
     
     var kings = World.getBlock(-11, 95, 6)?.getId().toString() == "minecraft:ender_chest";
-    var corals = World.getBlock(0, 0, 0)?.getId().toString() == "minecraft:ender_chest";
+    var corals = World.getBlock(-12, 114, 6)?.getId().toString() == "minecraft:ender_chest";
     var ogmap = World.getBlock(-13, 114, 7)?.getId().toString() == "minecraft:ender_chest";
     var seasons = World.getBlock(-12, 114, 5)?.getId().toString() == "minecraft:ender_chest";
     var genesis = World.getBlock(0, 0, 0)?.getId().toString() == "minecraft:ender_chest";
-    var harrys = World.getBlock(-13, 114, 4)?.getId().toString() == "minecraft:ender_chest";
+    var harrys = World.getBlock(11, 83, -6)?.getId().toString() == "minecraft:ender_chest";
     var limbo = World.getBlock(-21, 33, 23)?.getId().toString() == "minecraft:torch" && World.getBlock(-21, 33, 19)?.getId().toString() == "minecraft:torch";
     var hypixelHub = World?.getScoreboards()?.getCurrentScoreboard()?.getName()?.includes("MainScoreboard");
     
@@ -191,9 +220,9 @@ function getMap() {
         streakingBox.constraint_x2 = -15
         streakingBox.constraint_z1 = 15
         streakingBox.constraint_z2 = -15
-        streakingBox.constraint_y1 = 112
+        streakingBox.constraint_y1 = 82
         streakingBox.constraint_y2 = 26
-        streakingBox.spawnY = 112
+        streakingBox.spawnY = 82
     }
     else if (hypixelHub) {
         currentMap = "Hypixel Hub";
@@ -273,6 +302,7 @@ function getTarget() {
     const px = player.getPos().x, py = player.getPos().y, pz = player.getPos().z;
     const cyaw = player.getYaw();
 
+    if (currentMap === "Unknown" || currentMap === "Hypixel Limbo" || currentMap === "Hypixel Hub") return false;
     if (inSpawn()) return middle;
 
     const online = World.getEntities().toArray().filter(p => {
@@ -281,15 +311,16 @@ function getTarget() {
             x < streakingBox.constraint_x1 && x > streakingBox.constraint_x2 &&
             y < streakingBox.constraint_y1 && y > streakingBox.constraint_y2 &&
             z < streakingBox.constraint_z1 && z > streakingBox.constraint_z2;
-        const blacklist = p.getType().toString() === "minecraft:arrow";
+        const blacklist = p.getType().toString() === "minecraft:arrow" || p.getType().toString() === "minecraft:armor_stand";
         
         return withinBox && !blacklist;
     });
 
     online.splice(0, 1); // remove self from targets
     if (online.length === 0) {
-        enabled = !enabled;
-        Chat.log("Stopping due to lonliness");
+        enabled = false;
+        autoclicker.enabled = false;
+        //Chat.log("Stopping due to lonliness");
         return {x: 0, y: py, z: 0};
     }
 
@@ -316,7 +347,7 @@ function getTarget() {
     });
 
     const target = online[0];
-    //Chat.log(target); //DEBUG target name
+
     return {
         x: target.getPos().x,
         y: target.getPos().y,
@@ -377,7 +408,7 @@ let aimThread = new Thread(JavaWrapper.methodToJava(() => {
 
         const {x, y, z} = target;
         const {x: px, y: py, z: pz} = player.getPos();
-        const dx = x - px, dy = y - (py + 0.6), dz = z - pz;
+        const dx = x - px, dy = y - (py + -0.15), dz = z - pz;
         const distXZ = Math.sqrt(dx * dx + dz * dz);
 
         const targetYaw = -Math.atan2(dx, dz) * 180 / Math.PI;
@@ -392,14 +423,14 @@ let aimThread = new Thread(JavaWrapper.methodToJava(() => {
         const eased = ease(clamp(dt / 100, 0, 1));
         const pitchDamp = clamp(distXZ * 0.05, 0.1, 1.0);
         const basePitchRaw = cp + pd * eased * 0.15 * pitchDamp;
-        const basePitch = clamp(basePitchRaw, 1, 24);
+        const basePitch = clamp(basePitchRaw, 7, 24);
 
         const finalYaw = virtualYaw + gaussian() + Math.sin(now * 0.02 + seed) * 0.02;
         const finalPitch = clamp(
             basePitch
             + gaussian()
             + biasedNoise(basePitch, now + 100)
-            + skewed(now),
+            + (skewed(now) * 0.25),
             -90, 90
         );
 
@@ -434,7 +465,8 @@ function getBotState() {
         oof();
     }
     
-    Chat.actionbar(locationStatus + " Distance to Middle: " + dist_mid() + " " + currentMap + " [CPS] > " + randomization.cps);
+    antiStuck.runCheck();
+    
 }
 
 function startStreaking() {
@@ -466,8 +498,8 @@ function oof() {
 
 const autoclicker = {
     enabled: false,
-    min: 2,
-    max: 14,
+    min: 3,
+    max: 12.7,
     raytraceHitbox: true,
     raytraceDistance: 5
 };
@@ -609,3 +641,46 @@ JsMacros.on("Key", JavaWrapper.methodToJava(event => {
 
 */
 
+const overlay = {
+    hud: true,
+    targetBox: true,
+    
+    text_size: 0.8,
+    text_x: 100,
+    text_z: 100,
+
+    renderHud: () => {
+        if (!overlay.hud) return;
+
+
+        Chat.actionbar(locationStatus + " Distance to Middle: " + dist_mid() + " " + currentMap + " [CPS] > " + randomization.cps);
+    },
+
+    renderTargetBox: () => {
+        if (!overlay.targetBox) return;
+        const target = getTarget();
+        if (!target) {
+            Hud.clearDraw3Ds();
+            return;
+        }
+        
+        const x1 = target.x - 0.41;
+        const x2 = target.x + 0.41;
+        const y1 = target.y - 0.05;
+        const y2 = target.y + 1.8;
+        const z1 = target.z - 0.41;
+        const z2 = target.z + 0.41;
+
+        const color = 0x000000; // Hex Color Space
+        const alpha = 100; // 0 -> 100
+        const fillColor = 0xFF0000; // Hex Color Space
+        const fillAlpha = 35; // 0 -> 100
+        const fill = true;
+        
+        Hud.clearDraw3Ds();
+        var targetBox = Hud.createDraw3D();
+        targetBox.register();
+        targetBox.addBox(x1, y1, z1, x2, y2, z2, color, alpha, fillColor, fillAlpha, fill);
+    },
+
+};
