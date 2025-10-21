@@ -92,6 +92,9 @@ JsMacros.on("Disconnect", JavaWrapper.methodToJava( event => {
     locationStatus = undefined;
     currentMap = null;
     streakingBox.spawnY = undefined;
+    enabled = false;
+    autoclicker.enabled = false;
+    stopStreaking();
     
 }));
 
@@ -664,10 +667,10 @@ const overlay = {
             return;
         }
         
-        const x1 = target.x - 0.41;
-        const x2 = target.x + 0.41;
-        const y1 = target.y - 0.05;
-        const y2 = target.y + 1.8;
+        const x1 = target.x - 0.45;
+        const x2 = target.x + 0.45;
+        const y1 = target.y - 0.01;
+        const y2 = target.y + 1.99;
         const z1 = target.z - 0.41;
         const z2 = target.z + 0.41;
 
