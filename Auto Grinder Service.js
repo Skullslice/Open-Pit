@@ -143,7 +143,7 @@ function getMap() {
     var ogmap = World.getBlock(-13, 114, 7)?.getId().toString() == "minecraft:ender_chest";
     var seasons = World.getBlock(-12, 114, 5)?.getId().toString() == "minecraft:ender_chest";
     var genesis = World.getBlock(0, 0, 0)?.getId().toString() == "minecraft:ender_chest";
-    var harrys = World.getBlock(11, 83, -6)?.getId().toString() == "minecraft:ender_chest";
+    var harrys = World.getBlock(-13, 114, 4)?.getId().toString() == "minecraft:ender_chest";
     var limbo = World.getBlock(-21, 33, 23)?.getId().toString() == "minecraft:torch" && World.getBlock(-21, 33, 19)?.getId().toString() == "minecraft:torch";
     var hypixelHub = World?.getScoreboards()?.getCurrentScoreboard()?.getName()?.includes("MainScoreboard");
     
@@ -223,9 +223,9 @@ function getMap() {
         streakingBox.constraint_x2 = -15
         streakingBox.constraint_z1 = 15
         streakingBox.constraint_z2 = -15
-        streakingBox.constraint_y1 = 82
-        streakingBox.constraint_y2 = 26
-        streakingBox.spawnY = 82
+        streakingBox.constraint_y1 = 112
+        streakingBox.constraint_y2 = 81
+        streakingBox.spawnY = 112
     }
     else if (hypixelHub) {
         currentMap = "Hypixel Hub";
@@ -649,14 +649,26 @@ const overlay = {
     targetBox: true,
     
     text_size: 0.8,
+    text_kerning: 7,
     text_x: 100,
     text_z: 100,
+    color: 0xff12f3,
+    shadow: true,
+    rotation: 0,
 
     renderHud: () => {
-        if (!overlay.hud) return;
-
-
-        Chat.actionbar(locationStatus + " Distance to Middle: " + dist_mid() + " " + currentMap + " [CPS] > " + randomization.cps);
+        if (!overlay.hud) {
+            Hud.clearDraw2Ds();
+            return;
+        }
+        Hud.clearDraw2Ds();
+        var hud = Hud.createDraw2D();
+        hud.register();
+        hud.addText(currentMap ? currentMap : "error", overlay.text_x, overlay.text_z, overlay.color, overlay.shadow, overlay.text_size, overlay.rotation);
+        hud.addText(locationStatus ? locationStatus : "error", overlay.text_x, overlay.text_z - (overlay.text_kerning * 1), overlay.color, overlay.shadow, overlay.text_size, overlay.rotation);
+        hud.addText("Distance to Middle: " + dist_mid(), overlay.text_x, overlay.text_z - (overlay.text_kerning * 2), overlay.color, overlay.shadow, overlay.text_size, overlay.rotation);
+        hud.addText("[CPS] > " + (autoclicker.enabled ? randomization.cps : 0), overlay.text_x, overlay.text_z - (overlay.text_kerning * 3), overlay.color, overlay.shadow, overlay.text_size, overlay.rotation);
+        hud.addText("Auto Grinding: " + enabled, overlay.text_x, overlay.text_z - (overlay.text_kerning * 4), overlay.color, overlay.shadow, overlay.text_size, overlay.rotation);
     },
 
     renderTargetBox: () => {
