@@ -89,6 +89,8 @@ JsMacros.on("Tick", JavaWrapper.methodToJava(event => {
 
 
 JsMacros.on("Disconnect", JavaWrapper.methodToJava( event => {
+    Hud.clearDraw3Ds();
+    Hud.clearDraw2Ds();
     locationStatus = undefined;
     currentMap = null;
     streakingBox.spawnY = undefined;
@@ -193,10 +195,10 @@ function getMap() {
         prestige = {x: 0, y: 0, z: 0}
         items = {x: 0, y: 0, z: 0}
         upgrades = {x: 0, y: 0, z: 0}
-        streakingBox.constraint_x1 = 15
-        streakingBox.constraint_x2 = -15
-        streakingBox.constraint_z1 = 15
-        streakingBox.constraint_z2 = -15
+        streakingBox.constraint_x1 = 28
+        streakingBox.constraint_x2 = -28
+        streakingBox.constraint_z1 = 28
+        streakingBox.constraint_z2 = -28
         streakingBox.constraint_y1 = 90
         streakingBox.constraint_y2 = 80
         streakingBox.spawnY = 90
@@ -219,10 +221,10 @@ function getMap() {
         prestige = {x: 0, y: 0, z: 0}
         items = {x: 0, y: 0, z: 0}
         upgrades = {x: 0, y: 0, z: 0}
-        streakingBox.constraint_x1 = 15
-        streakingBox.constraint_x2 = -15
-        streakingBox.constraint_z1 = 15
-        streakingBox.constraint_z2 = -15
+        streakingBox.constraint_x1 = 30
+        streakingBox.constraint_x2 = -30
+        streakingBox.constraint_z1 = 30
+        streakingBox.constraint_z2 = -30
         streakingBox.constraint_y1 = 112
         streakingBox.constraint_y2 = 81
         streakingBox.spawnY = 112
@@ -314,15 +316,19 @@ function getTarget() {
             x < streakingBox.constraint_x1 && x > streakingBox.constraint_x2 &&
             y < streakingBox.constraint_y1 && y > streakingBox.constraint_y2 &&
             z < streakingBox.constraint_z1 && z > streakingBox.constraint_z2;
-        const blacklist = p.getType().toString() === "minecraft:arrow" || p.getType().toString() === "minecraft:armor_stand";
         
-        return withinBox && !blacklist;
+            const blacklist = p.getType().toString() === "minecraft:arrow" || p.getType().toString() === "minecraft:armor_stand";
+            const isPlayer = p.getType().toString() === "minecraft:player";
+
+        const mysticdrop = p.getName().toString().includes("Leather Pants", 0) || p.getName().toString().includes("Golden Sword", 0);
+        if (mysticdrop) return mysticdrop; //prioritize mystics
+        return withinBox && !blacklist && isPlayer;
     });
 
     online.splice(0, 1); // remove self from targets
     if (online.length === 0) {
-        enabled = false;
-        autoclicker.enabled = false;
+        //enabled = false;
+        //autoclicker.enabled = false;
         //Chat.log("Stopping due to lonliness");
         return {x: 0, y: py, z: 0};
     }
@@ -343,8 +349,8 @@ function getTarget() {
         const distA = Math.hypot(a.getPos().x - px, a.getPos().z - pz);
         const distB = Math.hypot(b.getPos().x - px, b.getPos().z - pz);
 
-        const deltaA = distA <= 3.25 ? Math.abs(normalizeAngle(yawTo(a) - cyaw)) : Infinity;
-        const deltaB = distB <= 3.25 ? Math.abs(normalizeAngle(yawTo(b) - cyaw)) : Infinity;
+        const deltaA = distA <= 5.25 ? Math.abs(normalizeAngle(yawTo(a) - cyaw)) : Infinity;
+        const deltaB = distB <= 5.25 ? Math.abs(normalizeAngle(yawTo(b) - cyaw)) : Infinity;
 
         return deltaA - deltaB;
     });
@@ -449,7 +455,6 @@ function getBotState() {
     
     if (inStreakingBox() === true) {
         locationStatus = "[Streaking Box]";
-        //lookAtTarget(getTarget());
         startStreaking();
     }
     else if (inSpawn() === true) {
@@ -458,7 +463,6 @@ function getBotState() {
             movementDelay += 30;
         }
         locationStatus = "[Spawn]";
-        //lookAtTarget(getTarget());
         startStreaking();
     }
     else if (inSpawn() === false && inStreakingBox() === false) {
@@ -645,30 +649,87 @@ JsMacros.on("Key", JavaWrapper.methodToJava(event => {
 */
 
 const overlay = {
-    hud: true,
-    targetBox: true,
     
-    text_size: 0.8,
-    text_kerning: 7,
-    text_x: 100,
-    text_z: 100,
-    color: 0xff12f3,
-    shadow: true,
-    rotation: 0,
+    autogrinder: true,
+    playerlist: true,
+    targetBox: true,
 
+    //example player list
+    opposition: [
+    "Coopnutt",
+    "Weenylover",
+    "macroingfr",
+    "Wynnik",
+    "WhosSofi",
+    "Bpan",
+    "quadedit",
+    "seturn",
+    "shootafrom63rd",
+    "rayzor",
+    "ezsmoked",
+    "seql",
+    "wesi",
+    "qarod",
+    "bikkie",
+    "bikkie666",
+    "foreverrich_",
+    "mcstitch666",
+    "mcstitchv2",
+    "RingMinging",
+    "CitySquare",
+    "Venompitv2",
+    "fatcatwitharat80",
+    "2D22",
+    "Brudderbot",
+    "ItsMichaelGaming",
+    "lmelove"
+    ],
+
+    grinder_hud: null,
+    player_hud: null,
+    lastOpsHash: "",
+    lastRenderTick: 0,
+    renderInterval: 3, // update every 3 ticks
+    
     renderHud: () => {
-        if (!overlay.hud) {
-            Hud.clearDraw2Ds();
-            return;
+        if (overlay.autogrinder) {
+            overlay.grinder_hud?.unregister();
+            overlay.grinder_hud = Hud.createDraw2D();
+            overlay.grinder_hud.register();
+            var text_size = 0.8, text_kerning = 7, text_x = 20, text_z = 100, color = 0xff12f3, shadow = true, rotation = 0;
+            overlay.grinder_hud.addText(currentMap ? currentMap : "error", text_x, text_z, color, shadow, text_size, rotation);
+            overlay.grinder_hud.addText(locationStatus ? locationStatus : "error", text_x, text_z - (text_kerning * 1), color, shadow, text_size, rotation);
+            overlay.grinder_hud.addText("Distance to Middle: " + dist_mid(), text_x, text_z - (text_kerning * 2), color, shadow, text_size, rotation);
+            overlay.grinder_hud.addText("[CPS] > " + (autoclicker.enabled ? randomization.cps : 0), text_x, text_z - (text_kerning * 3), color, shadow, text_size, rotation);
+            overlay.grinder_hud.addText("Auto Grinding: " + enabled, text_x, text_z - (text_kerning * 4), color, shadow, text_size, rotation);
         }
-        Hud.clearDraw2Ds();
-        var hud = Hud.createDraw2D();
-        hud.register();
-        hud.addText(currentMap ? currentMap : "error", overlay.text_x, overlay.text_z, overlay.color, overlay.shadow, overlay.text_size, overlay.rotation);
-        hud.addText(locationStatus ? locationStatus : "error", overlay.text_x, overlay.text_z - (overlay.text_kerning * 1), overlay.color, overlay.shadow, overlay.text_size, overlay.rotation);
-        hud.addText("Distance to Middle: " + dist_mid(), overlay.text_x, overlay.text_z - (overlay.text_kerning * 2), overlay.color, overlay.shadow, overlay.text_size, overlay.rotation);
-        hud.addText("[CPS] > " + (autoclicker.enabled ? randomization.cps : 0), overlay.text_x, overlay.text_z - (overlay.text_kerning * 3), overlay.color, overlay.shadow, overlay.text_size, overlay.rotation);
-        hud.addText("Auto Grinding: " + enabled, overlay.text_x, overlay.text_z - (overlay.text_kerning * 4), overlay.color, overlay.shadow, overlay.text_size, overlay.rotation);
+        
+        if (overlay.playerlist) {
+            const currentTick = Math.floor(Time.time() / 50);
+            const ops = getOps();
+            const currentHash = hashUpdates(ops);
+
+            if (currentHash !== overlay.lastOpsHash || currentTick - overlay.lastRenderTick >= overlay.renderInterval) {
+                
+                overlay.player_hud?.unregister();
+                overlay.player_hud = Hud.createDraw2D();
+                overlay.player_hud.register();
+                overlay.lastOpsHash = currentHash;
+                overlay.lastRenderTick = currentTick;
+
+                var text_size = 0.8, text_kerning = 8, text_x = 20, text_z = 100, color = 0x17ff55, shadow = true, rotation = 0;
+                overlay.player_hud.addText("Player List", text_x, text_z + (text_kerning * 1), color, shadow, text_size, rotation);
+
+                var indexer = 0;
+                for (let i = 0; i < onlineOps.length; i++) {
+                    overlay.player_hud.addText("\u00A7b" + onlineOps[i].name + "\u00A7c " + onlineOps[i].distance + "\u00A7e " + onlineOps[i].leggings, text_x, text_z + (text_kerning * (i + 2)), color, shadow, text_size, rotation);
+                    indexer++;
+                }
+
+                overlay.player_hud.addText("Nicked Players", text_x, text_z + (text_kerning * (indexer + 2)), color, shadow, text_size, rotation);
+                overlay.player_hud.addText("\u00A77[\u00A76Available Soon\u00A77]", text_x, text_z + (text_kerning * (indexer + 3)), color, shadow, text_size, rotation);
+            }
+        }
     },
 
     renderTargetBox: () => {
@@ -697,5 +758,93 @@ const overlay = {
         targetBox.register();
         targetBox.addBox(x1, y1, z1, x2, y2, z2, color, alpha, fillColor, fillAlpha, fill);
     },
-
 };
+
+var onlineOps = [];
+
+function getOps() {
+    var player = World.getLoadedPlayers().toArray();
+    onlineOps = [];
+    for (var i = 0; i < overlay.opposition.length; i++) {
+        for (var j = 0; j < player.length; j++) {
+            if (player[j].getName().toString().toUpperCase().includes(overlay.opposition[i].toUpperCase())) {
+                onlineOps.push({name: overlay.opposition[i], distance: getDistance(overlay.opposition[i]), leggings: getLeggings(overlay.opposition[i])});
+            }
+        }
+    }
+    if (onlineOps.length == 0) onlineOps.push({name: "You are the only opp in the lob!", distance: "", leggings: ""});
+    return onlineOps;
+}
+
+function hashUpdates(ops) {
+    return ops.map(op => `${op.name}-${op.distance}-${op.leggings}`).join("|");
+}
+
+
+function getLeggings(opname) {
+    var player = World.getLoadedPlayers().toArray();
+    var lives = "";
+    var leggings = "";
+
+    for (var i = 0; i < player.length; i++) {
+        try {
+            if (player[i].toString().toUpperCase().includes(opname.toUpperCase())) {
+                var armor = player[i].getLegArmor();
+                if (!armor || armor.isEmpty()) break;
+
+                var inputString = armor.getNBT().toString();
+                lives = parseLives(inputString);
+
+                if (inputString.includes("Regularity")) leggings += "\u00A74REGULARITY\u00A77 " + parseLevel("Regularity", inputString);
+                else if (inputString.includes("New Deal")) leggings += " \u00A75NEWDEAL\u00A77 " + parseLevel("New Deal", inputString);
+                else if (inputString.includes("Do It Like")) leggings += " \u00A46Doing French\u00A77 " + parseLevel("French", inputString);
+                if (inputString.includes("Solitude")) leggings += " \u00A7dSOLITUDE\u00A77 " + parseLevel("Solitude", inputString);
+                if (inputString.includes("Funky")) leggings += " \u00A71Crit Funky\u00A77 " + parseLevel("Funky", inputString);
+                if (inputString.includes("Mirror")) leggings += " \u00A7fMirror\u00A77 " + parseLevel("Mirror", inputString);
+                if (inputString.includes("Retro-Gravity")) leggings += " \u00A7dRetro-Gravity Microcosm\u00A77 " + parseLevel("Retro-Gravity Microcosm", inputString);
+                if (inputString.includes("Gotta Go Fast")) leggings += " \u00A7eGotta Go Fast\u00A77 " + parseLevel("Gotta Go Fast", inputString);
+                if (inputString.includes("Fractional Reserve")) leggings += " \u00A7dFractional Reserve\u00A77 " + parseLevel("Fractional Reserve", inputString);
+                if (inputString.includes("Peroxide")) leggings += " \u00A7cPeroxide\u00A77 " + parseLevel("Peroxide", inputString);
+                if (inputString.includes("Venom")) leggings += "\u00A7aVENOM";
+                if (armor.toString().includes("diamond")) leggings = "\u00A7bDiamond Legs";
+
+                leggings += "\u00A7f " + lives;
+            }
+        } catch (err) {
+            leggings += "\u00A74[Error]";
+        }
+    }
+
+    return leggings;
+}
+
+
+function getDistance(opname) {
+    var x = 0;
+    var y = 0;
+    var z = 0;
+    var player = World.getLoadedPlayers().toArray();
+    for (i = 0; i < player.length; i++) {
+        if (player[i].toString().toUpperCase().includes(opname.toUpperCase())) {
+            x = Math.abs(player[i].getX() - player[0].getX());
+            y = Math.abs(player[i].getY() - player[0].getY());
+            z = Math.abs(player[i].getZ() - player[0].getZ());
+        }
+    }
+    return Math.floor(Math.sqrt(x * x + y * y + z * z));
+}
+
+function parseLives(str) {
+    const match = str.match(/["']?Lives["']?\s*[:=]?\s*(\d+)\s*\/\s*(\d+)/);
+    if (match) {
+        return `${match[1]} / ${match[2]}`;
+    }
+    return Number.POSITIVE_INFINITY;
+}
+
+function parseLevel(matcher, str) {
+    const safeMatcher = matcher.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // escape special chars
+    const pattern = new RegExp(`\\b${safeMatcher}\\b\\s(I|II|III|IV|V|VI|VII|VIII|IX|X)\\b`);
+    const match = str.match(pattern);
+    return match ? match[1] : null;
+}
