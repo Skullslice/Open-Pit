@@ -43,6 +43,65 @@ const antiStuck = {
     },
 };
 
+/* 
+
+[=======================]
+[ ----- W Tapping ----- ]
+[=======================]
+
+*/
+
+const wTap = {
+    enabled: true,
+    hold_min: 60,
+    hold_max: 200,
+    delay_min: 100,
+    delay_max: 3400,
+    distance: 3.89,
+
+    lastHold: 0,
+    lastDelay: 0,
+    isKeyDown: false,
+
+    currentHoldTime: 0,
+    currentDelayTime: 0,
+
+    runCheck: () => {
+        const time = Time.time();
+        const targetDistance = getTarget()?.distance;
+        const canTrigger = targetDistance !== undefined && wTap.distance >= targetDistance;
+
+        if (!wTap.enabled) return;
+
+        // If the key is not down
+        if (canTrigger && !wTap.isKeyDown && time - wTap.lastDelay >= wTap.currentDelayTime) {
+            wTap.lastDelay = time;
+            wTap.lastHold = time;
+            wTap.isKeyDown = true;
+
+            // Lock in new randomized durations
+            wTap.currentHoldTime = wTap.hold_min + Math.floor(Math.random() * (wTap.hold_max - wTap.hold_min));
+            wTap.currentDelayTime = wTap.delay_min + Math.floor(Math.random() * (wTap.delay_max - wTap.delay_min));
+
+            startStreaking();
+            return;
+        }
+
+        // If the key is down
+        if (wTap.isKeyDown && time - wTap.lastHold >= wTap.currentHoldTime && locationStatus) {
+            wTap.lastHold = time;
+            wTap.isKeyDown = false;
+            stopStreaking();
+            return;
+        }
+
+        else if (wTap.isKeyDown || !canTrigger) {
+            startStreaking();
+        }
+    },
+};
+
+
 var enabled = false; //the bot should be off when cluient starts.
 var sneak = true; //occasionally sneaks in middle.
 var bow = true; //occasionally uses the bow and aims and shoots.
@@ -97,11 +156,17 @@ JsMacros.on("Disconnect", JavaWrapper.methodToJava( event => {
     enabled = false;
     autoclicker.enabled = false;
     stopStreaking();
-    
 }));
 
 JsMacros.on("JoinServer", JavaWrapper.methodToJava( event => {
-    Client.waitTick(1);
+    Hud.clearDraw3Ds();
+    Hud.clearDraw2Ds();
+    locationStatus = undefined;
+    currentMap = null;
+    streakingBox.spawnY = undefined;
+    enabled = false;
+    autoclicker.enabled = false;
+    stopStreaking();
 }));
 
 JsMacros.on("Key", JavaWrapper.methodToJava( event => {
@@ -145,7 +210,7 @@ function getMap() {
     var ogmap = World.getBlock(-13, 114, 7)?.getId().toString() == "minecraft:ender_chest";
     var seasons = World.getBlock(-12, 114, 5)?.getId().toString() == "minecraft:ender_chest";
     var genesis = World.getBlock(0, 0, 0)?.getId().toString() == "minecraft:ender_chest";
-    var harrys = World.getBlock(-13, 114, 4)?.getId().toString() == "minecraft:ender_chest";
+    var harrys = World.getBlock(12, 95, 6)?.getId().toString() == "minecraft:ender_chest";
     var limbo = World.getBlock(-21, 33, 23)?.getId().toString() == "minecraft:torch" && World.getBlock(-21, 33, 19)?.getId().toString() == "minecraft:torch";
     var hypixelHub = World?.getScoreboards()?.getCurrentScoreboard()?.getName()?.includes("MainScoreboard");
     
@@ -221,13 +286,13 @@ function getMap() {
         prestige = {x: 0, y: 0, z: 0}
         items = {x: 0, y: 0, z: 0}
         upgrades = {x: 0, y: 0, z: 0}
-        streakingBox.constraint_x1 = 30
-        streakingBox.constraint_x2 = -30
-        streakingBox.constraint_z1 = 30
-        streakingBox.constraint_z2 = -30
-        streakingBox.constraint_y1 = 112
-        streakingBox.constraint_y2 = 81
-        streakingBox.spawnY = 112
+        streakingBox.constraint_x1 = 20
+        streakingBox.constraint_x2 = -20
+        streakingBox.constraint_z1 = 20
+        streakingBox.constraint_z2 = -20
+        streakingBox.constraint_y1 = 75
+        streakingBox.constraint_y2 = 70
+        streakingBox.spawnY = 75
     }
     else if (hypixelHub) {
         currentMap = "Hypixel Hub";
@@ -330,7 +395,7 @@ function getTarget() {
         //enabled = false;
         //autoclicker.enabled = false;
         //Chat.log("Stopping due to lonliness");
-        return {x: 0, y: py, z: 0};
+        return {x: 0, y: py, z: 0, distance: null};
     }
 
     const yawTo = entity => {
@@ -349,8 +414,8 @@ function getTarget() {
         const distA = Math.hypot(a.getPos().x - px, a.getPos().z - pz);
         const distB = Math.hypot(b.getPos().x - px, b.getPos().z - pz);
 
-        const deltaA = distA <= 5.25 ? Math.abs(normalizeAngle(yawTo(a) - cyaw)) : Infinity;
-        const deltaB = distB <= 5.25 ? Math.abs(normalizeAngle(yawTo(b) - cyaw)) : Infinity;
+        const deltaA = distA <= 4.15 ? Math.abs(normalizeAngle(yawTo(a) - cyaw)) : Infinity;
+        const deltaB = distB <= 4.15 ? Math.abs(normalizeAngle(yawTo(b) - cyaw)) : Infinity;
 
         return deltaA - deltaB;
     });
@@ -360,7 +425,8 @@ function getTarget() {
     return {
         x: target.getPos().x,
         y: target.getPos().y,
-        z: target.getPos().z
+        z: target.getPos().z,
+        distance: Math.hypot(target.getPos().x - px, target.getPos().z - pz)
     };
 }
 
@@ -455,7 +521,7 @@ function getBotState() {
     
     if (inStreakingBox() === true) {
         locationStatus = "[Streaking Box]";
-        startStreaking();
+        wTap.runCheck();
     }
     else if (inSpawn() === true) {
         if (locationStatus == "[Down and outside bounds]" || locationStatus == "[Streaking Box]") {
@@ -505,9 +571,9 @@ function oof() {
 
 const autoclicker = {
     enabled: false,
-    min: 3,
-    max: 12.7,
-    raytraceHitbox: true,
+    min: 1.5,
+    max: 9,
+    raytraceHitbox: false,
     raytraceDistance: 5
 };
 
@@ -656,6 +722,7 @@ const overlay = {
 
     //example player list
     opposition: [
+    "BestAlya",
     "Coopnutt",
     "Weenylover",
     "macroingfr",
