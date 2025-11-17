@@ -53,13 +53,13 @@ const antiStuck = {
 
 const wTap = {
     enabled: true,
-    hold_min: 60,
-    hold_max: 80,
+    hold_min: 150,
+    hold_max: 240,
     delay_min: 50,
-    delay_max: 435,
+    delay_max: 250,
     jump_delay_min: 50,
     jump_delay_max: 950,
-    distance: 3.4,
+    distance: 2.46,
     jump_chance: 0.20,
 
     lastHold: 0,
@@ -102,8 +102,14 @@ const wTap = {
             wTap.lastDelay = time;
             wTap.isKeyDown = false;
             wTap.currentDelayTime = wTap.delay_min + Math.floor(Math.random() * (wTap.delay_max - wTap.delay_min));
+            movementDelay += wTap.currentDelayTime / 50;
             stopStreaking();
             return;
+        }
+
+        //finally if the target moves out of range, we want to make sure the bot can keep up!
+        if (!canTrigger && inStreakingBox()) {
+            movementDelay = 0;
         }
 
         startStreaking();
@@ -146,6 +152,7 @@ JsMacros.on("Tick", JavaWrapper.methodToJava(event => {
     }
 
     if (commandTickCooldown >= 0) commandTickCooldown--;
+    if (movementDelay >= 0) movementDelay--;
 
     getBotState();
     
@@ -552,10 +559,7 @@ function getBotState() {
 }
 
 function startStreaking() {
-    if (movementDelay > 0) {
-        movementDelay--;
-        return;
-    }
+    if (movementDelay > 0) return;
     KeyBind.pressKeyBind("key.forward");
 }
 
