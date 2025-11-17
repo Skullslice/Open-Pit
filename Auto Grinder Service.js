@@ -54,50 +54,59 @@ const antiStuck = {
 const wTap = {
     enabled: true,
     hold_min: 60,
-    hold_max: 200,
-    delay_min: 100,
-    delay_max: 3400,
-    distance: 3.89,
+    hold_max: 80,
+    delay_min: 50,
+    delay_max: 435,
+    jump_delay_min: 50,
+    jump_delay_max: 950,
+    distance: 3.4,
+    jump_chance: 0.20,
 
     lastHold: 0,
     lastDelay: 0,
+    lastJump: 0,
     isKeyDown: false,
 
     currentHoldTime: 0,
     currentDelayTime: 0,
+    currentJumpTime: 0,
 
     runCheck: () => {
         const time = Time.time();
         const targetDistance = getTarget()?.distance;
         const canTrigger = targetDistance !== undefined && wTap.distance >= targetDistance;
 
-        if (!wTap.enabled) return;
+        //Every tick it re checks the chance so theres a small chance to insta jump which is still possible in vanilla MC. Low chances should be perfectly fine.
+        //This still respects the jump cooldowns properly.
+        if (Player.getPlayer().isOnGround() && wTap.jump_chance > Math.random() && time - wTap.lastJump >= wTap.currentJumpTime) {
+            wTap.lastJump = time;
+            wTap.currentJumpTime = wTap.jump_delay_min + Math.floor(Math.random() * (wTap.jump_delay_max - wTap.jump_delay_min));
+            KeyBind.pressKeyBind("key.jump");
+        } else {
+            KeyBind.releaseKeyBind("key.jump");
+        }
+        
+        if (!wTap.enabled) return startStreaking();
 
         // If the key is not down
-        if (canTrigger && !wTap.isKeyDown && time - wTap.lastDelay >= wTap.currentDelayTime) {
-            wTap.lastDelay = time;
+        if (canTrigger && !wTap.isKeyDown && time - wTap.lastHold >= wTap.currentHoldTime) {
             wTap.lastHold = time;
             wTap.isKeyDown = true;
-
-            // Lock in new randomized durations
             wTap.currentHoldTime = wTap.hold_min + Math.floor(Math.random() * (wTap.hold_max - wTap.hold_min));
-            wTap.currentDelayTime = wTap.delay_min + Math.floor(Math.random() * (wTap.delay_max - wTap.delay_min));
-
             startStreaking();
             return;
         }
 
         // If the key is down
-        if (wTap.isKeyDown && time - wTap.lastHold >= wTap.currentHoldTime && locationStatus) {
-            wTap.lastHold = time;
+        if (wTap.isKeyDown && locationStatus && time - wTap.lastDelay >= wTap.currentDelayTime) {
+            wTap.lastDelay = time;
             wTap.isKeyDown = false;
+            wTap.currentDelayTime = wTap.delay_min + Math.floor(Math.random() * (wTap.delay_max - wTap.delay_min));
             stopStreaking();
             return;
         }
 
-        else if (wTap.isKeyDown || !canTrigger) {
-            startStreaking();
-        }
+        startStreaking();
     },
 };
 
@@ -290,9 +299,9 @@ function getMap() {
         streakingBox.constraint_x2 = -20
         streakingBox.constraint_z1 = 20
         streakingBox.constraint_z2 = -20
-        streakingBox.constraint_y1 = 75
-        streakingBox.constraint_y2 = 70
-        streakingBox.spawnY = 75
+        streakingBox.constraint_y1 = 78
+        streakingBox.constraint_y2 = 25
+        streakingBox.spawnY = 78
     }
     else if (hypixelHub) {
         currentMap = "Hypixel Hub";
@@ -906,7 +915,7 @@ function parseLives(str) {
     if (match) {
         return `${match[1]} / ${match[2]}`;
     }
-    return Number.POSITIVE_INFINITY;
+    return "";
 }
 
 function parseLevel(matcher, str) {
