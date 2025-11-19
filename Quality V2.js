@@ -3,6 +3,10 @@ var players = World.getLoadedPlayers().toArray()
 var mapHeight = 110
 const spawn = new Array()
 const pit = new Array()
+const r1 = new Array()
+const r2 = new Array()
+const r3 = new Array()
+const r4 = new Array()
 
 function removePlayerPit(array, value) {
   var index = array.indexOf(value);
