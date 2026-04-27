@@ -140,6 +140,10 @@ JsMacros.on("Tick", JavaWrapper.methodToJava(event => {
     overlay.renderHud();
     overlay.renderTargetBox();
     FishingHelper.tickContainer();
+	const now = Time.time();
+	const windowSize = 1000;
+    randomization.clicks = randomization.clicks.filter(entry => now - entry.time <= windowSize);
+    randomization.cps = (randomization.clicks.length * 1000) / windowSize;
     
     if (streakingBox.constraint_y1 === undefined) {
         Client.waitTick(1);
@@ -170,19 +174,26 @@ JsMacros.on("Tick", JavaWrapper.methodToJava(event => {
     }
 
 
-    if (!enabled || Hud.getOpenScreen() !== null) return;
+    if (!enabled) return;
+	if (Hud.getOpenScreen() !== null) {
+		Player.openInventory().close();
+		return;
+	}
     
     // Tick Cooldowns
     if (commandTickCooldown > 0) commandTickCooldown--;
     if (movementDelay > 0) movementDelay--;
     if (aimTickDelay > 0) aimTickDelay--;
+	
+	//Tick Pit events
+	if (!event.runCheck()) return;
     
     getBotState();
 }));
 
 
 JsMacros.on("Disconnect", JavaWrapper.methodToJava( event => {
-    Chat.log("Debug Disconnect")
+    //Chat.log("Debug Disconnect")
     Hud.clearDraw3Ds();
     Hud.clearDraw2Ds();
     locationStatus = undefined;
@@ -195,7 +206,7 @@ JsMacros.on("Disconnect", JavaWrapper.methodToJava( event => {
 }));
 
 JsMacros.on("JoinServer", JavaWrapper.methodToJava( event => {
-    Chat.log("Debug Join Server")
+    //Chat.log("Debug Join Server")
     Hud.clearDraw3Ds();
     Hud.clearDraw2Ds();
     locationStatus = undefined;
@@ -208,7 +219,7 @@ JsMacros.on("JoinServer", JavaWrapper.methodToJava( event => {
 }));
 
 JsMacros.on("DimensionChange", JavaWrapper.methodToJava( event => {
-    Chat.log(event.toString());
+    //Chat.log(event.toString());
     Hud.clearDraw3Ds();
     Hud.clearDraw2Ds();
     locationStatus = undefined;
@@ -264,6 +275,25 @@ var region = {
     r2: { name: "R2", check: (x, z) => x >= 0 && z <= 0 },
     r3: { name: "R3", check: (x, z) => x <= 0 && z <= 0 },
     r4: { name: "R4", check: (x, z) => x <= 0 && z >= 0 },
+};
+
+var event = {
+	name: "",
+	uuid: "",
+	blacklist: ["SQUADS", "SPIRE", "PIZZA"],
+	whitelist: ["KOTH"],
+	runCheck: () => {
+		const iter = World.getBossBars().values().iterator();
+		if (!iter.hasNext()) return true; //if theres no events skip the check.
+		const bar = iter.next(); // BossBar
+		
+		event.name = bar.getName().toString();
+        event.uuid = bar.getUUID().toString();
+
+		if (!event.blacklist.includes(event.name)) return true;
+		return false; //false if we fail all the checks.
+		
+	}
 };
 
 let regionThread = null;
@@ -482,7 +512,7 @@ function getMap() {
     var corals = World.getBlock(-12, 114, 6)?.getId().toString() == "minecraft:ender_chest";
     var ogmap = World.getBlock(-13, 114, 7)?.getId().toString() == "minecraft:ender_chest";
     var seasons = World.getBlock(-12, 114, 5)?.getId().toString() == "minecraft:ender_chest";
-    var genesis = World.getBlock(0, 0, 0)?.getId().toString() == "minecraft:ender_chest";
+    var genesis = World.getBlock(-16, 86, 9)?.getId().toString() == "minecraft:ender_chest";
     var harrys = World.getBlock(12, 95, 6)?.getId().toString() == "minecraft:ender_chest";
     var limbo = World.getBlock(-21, 33, 23)?.getId().toString() == "minecraft:torch" && World.getBlock(-21, 33, 19)?.getId().toString() == "minecraft:torch";
     var hypixelHub = World?.getScoreboards()?.getCurrentScoreboard()?.getName()?.includes("MainScoreboard");
@@ -570,13 +600,13 @@ function getMap() {
         streakingBox.constraint_x2 = -15
         streakingBox.constraint_z1 = 15
         streakingBox.constraint_z2 = -15
-        streakingBox.constraint_y1 = 113
-        streakingBox.constraint_y2 = 80
+        streakingBox.constraint_y1 = 84
+        streakingBox.constraint_y2 = 41
 
-        region.r1.name = "R1 TEST"
-        region.r2.name = "R2 TEST"
-        region.r3.name = "R3 TEST"
-        region.r4.name = "R4 BEACH"
+        region.r1.name = "Garden"
+        region.r2.name = "Demon"
+        region.r3.name = "Badlands"
+        region.r4.name = "Palace"
     }
     else if (harrys) {
         currentMap = "Sandbox"
@@ -781,7 +811,7 @@ function getBotState() {
         oof();
     }
     
-    antiStuck.runCheck();
+	antiStuck.runCheck();
     
 }
 
@@ -849,7 +879,7 @@ function click(delay) {
     KeyBind.pressKeyBind("key.attack");
     Time.sleep(Math.floor(delay / 2));
     KeyBind.releaseKeyBind("key.attack");
-    randomization.clicks.push({ time: Time.time() }); // log timestamp for rolling CPS
+    //randomization.clicks.push({ time: Time.time() }); // log timestamp for rolling CPS
     return true;
 }
 
@@ -919,7 +949,6 @@ let clickThread = null;
 JsMacros.on("Key", JavaWrapper.methodToJava(event => {
     if (event.key == "key.keyboard.i" && event.action === 1) {
         autoclicker.enabled = !autoclicker.enabled;
-        const windowSize = 1000; // 1 second window
 
         if (autoclicker.enabled) {
             clickThread = new Thread(JavaWrapper.methodToJava(() => {
@@ -930,9 +959,6 @@ JsMacros.on("Key", JavaWrapper.methodToJava(event => {
                         continue;
                     }
                     
-                    const now = Time.time();
-                    randomization.clicks = randomization.clicks.filter(entry => now - entry.time <= windowSize);
-                    randomization.cps = (randomization.clicks.length * 1000) / windowSize;
                     click(generateNoiseDelay());
                     Time.sleep(0);
                 }
@@ -944,6 +970,9 @@ JsMacros.on("Key", JavaWrapper.methodToJava(event => {
             KeyBind.releaseKeyBind("key.attack"); //double check to ensure we release the key.
         }
     }
+	if (event.key == "key.mouse.left" && event.action === 0) {
+		randomization.clicks.push({ time: Time.time() }); // log timestamp for rolling CPS
+	}
 }));
 
 /*
@@ -955,23 +984,39 @@ JsMacros.on("Key", JavaWrapper.methodToJava(event => {
 */
 
 const config = {
-    // Path to your JSON file
-    filePath: "config.json",
+    filePath: "PlayerList.json",
 
-    // Helper: load JSON file or create if missing
     load: () => {
+        // Create file if missing
         if (!FS.exists(config.filePath)) {
-            FS.toRawFile(config.filePath).write(JSON.stringify([])); // create empty array
+            const f = FS.open(config.filePath);
+            f.write("[]");
         }
-        const raw = FS.toRawFile(config.filePath).read();
-        return JSON.parse(raw);
+
+        // Open file for reading
+        const f = FS.open(config.filePath);
+        const rawBytes = f.read();
+
+        const raw = new java.lang.String(rawBytes);
+
+        try {
+            return JSON.parse(raw);
+        } catch (e) {
+            Chat.log("PlayerList.json corrupted, resetting.");
+            const f2 = FS.open(config.filePath);
+            f2.write("[]");
+            return [];
+        }
     },
 
-    // Helper: save JSON file
     save: (arr) => {
-        FS.toRawFile(config.filePath).write(JSON.stringify(arr, null, 2));
+        const json = JSON.stringify(arr, null, 2);
+
+        const f = FS.open(config.filePath);
+        f.write(json);
     },
 };
+
 
 const overlay = {
     
@@ -993,8 +1038,8 @@ const overlay = {
             var text_size = 0.8, text_kerning = 7, text_x = 4, text_z = 100, color = 0xff12f3, shadow = true, rotation = 0;
             overlay.grinder_hud.addText((currentMap ? currentMap : "error") + " \u00bb " + (locationStatus ? locationStatus : "error"), text_x, text_z - (text_kerning * 1), color, shadow, text_size, rotation);
             overlay.grinder_hud.addText("Distance to Middle: " + dist_mid(), text_x, text_z - (text_kerning * 2), color, shadow, text_size, rotation);
-            overlay.grinder_hud.addText("[CPS] > " + (autoclicker.enabled ? randomization.cps : 0), text_x, text_z - (text_kerning * 3), color, shadow, text_size, rotation);
-            overlay.grinder_hud.addText(enabled ? "\u00A7f[\u00A7aAuto Grinding\u00A7f]" : "\u00A7f[\u00A7cAuto Grinding\u00A7f]", text_x, text_z - (text_kerning * 4), color, shadow, text_size, rotation);
+            overlay.grinder_hud.addText("[CPS] > " + randomization.cps, text_x, text_z - (text_kerning * 3), color, shadow, text_size, rotation);
+            overlay.grinder_hud.addText(enabled ? "\u00A7f[\u00A7aPit Utility\u00A7f]" : "\u00A7f[\u00A7cPit Utility\u00A7f]", text_x, text_z - (text_kerning * 4), color, shadow, text_size, rotation);
         }
         
         if (overlay.playerlist) {
@@ -1117,30 +1162,30 @@ function getLeggings(opname) {
                 lives = parseLives(inputString);
 
                 //dangerous enchantments Respawn: Absorption, Escape Pod, Counter-Offensive, Excess, Danger Close, Boo-boo
-                if (inputString.includes("Regularity")) leggings += "\u00A74Regularity\u00A77 " + parseLevel("Regularity", inputString);
-                else if (inputString.includes("New Deal")) leggings += " \u00A75New Deal\u00A77 " + parseLevel("New Deal", inputString);
-                else if (inputString.includes("Do it like")) leggings += " \u00A46French\u00A77 " + parseLevel("Do it like the French", inputString);
-                if (inputString.includes("Solitude")) leggings += " \u00A7dSoli\u00A77 " + parseLevel("Solitude", inputString);
-                if (inputString.includes("Funky")) leggings += " \u00A71Crit Funky\u00A77 " + parseLevel("Funky", inputString);
-                if (inputString.includes("Mirror")) leggings += " \u00A7fMirror\u00A77 " + parseLevel("Mirror", inputString);
-                if (inputString.includes("Retro-Gravity")) leggings += " \u00A7dRGM\u00A77 " + parseLevel("Retro-Gravity Microcosm", inputString);
-                if (inputString.includes("Phoenix")) leggings += " \u00A7dPhoenix\u00A77 " + parseLevel("Phoenix", inputString);
-                if (inputString.includes("Gotta go fast")) leggings += " \u00A7eFast\u00A77 " + parseLevel("Gotta go fast", inputString);
-                if (inputString.includes("Fractional Reserve")) leggings += " \u00A7dFractional Reserve\u00A77 " + parseLevel("Fractional Reserve", inputString);
-                if (inputString.includes("Peroxide")) leggings += " \u00A7cPeroxide\u00A77 " + parseLevel("Peroxide", inputString);
-                if (inputString.includes("Golden Heart")) leggings += " \u00A71Golden Heart\u00A77 " + parseLevel("Golden Heart", inputString);
-                if (inputString.includes("Last Stand")) leggings += " \u00A71Last Stand\u00A77 " + parseLevel("Last Stand", inputString);
-                if (inputString.includes("Not Gladiator")) leggings += " \u00A71Not Gladiator\u00A77 " + parseLevel("Not Gladiator", inputString);
-                if (inputString.includes("Prick")) leggings += " \u00A71Prick\u00A77 " + parseLevel("Prick", inputString);
-                if (inputString.includes("Protection")) leggings += " \u00A71Protection\u00A77 " + parseLevel("Protection", inputString);
-                if (inputString.includes("David and Goliath")) leggings += " \u00A71DAG\u00A77 " + parseLevel("David and Goliath", inputString);
+                if (inputString.includes("Regularity")) leggings += "\u00A74reg\u00A77 " + parseLevel("Regularity", inputString);
+                else if (inputString.includes("New Deal")) leggings += " \u00A76newdeal\u00A77 " + parseLevel("New Deal", inputString);
+                else if (inputString.includes("Do it like")) leggings += " \u00A4cfrench\u00A77 " + parseLevel("Do it like the French", inputString);
+                if (inputString.includes("Solitude")) leggings += " \u00A7dsoli\u00A77 " + parseLevel("Solitude", inputString);
+                if (inputString.includes("Funky")) leggings += " \u00A7bcf\u00A77 " + parseLevel("Funky", inputString);
+                if (inputString.includes("Mirror")) leggings += " \u00A7fmir\u00A77 " + parseLevel("Mirror", inputString);
+                if (inputString.includes("Retro-Gravity")) leggings += " \u00A7drgm\u00A77 " + parseLevel("Retro-Gravity Microcosm", inputString);
+                if (inputString.includes("Phoenix")) leggings += " \u00A7cphoenix\u00A77 " + parseLevel("Phoenix", inputString);
+                if (inputString.includes("Gotta go fast")) leggings += " \u00A7efast\u00A77 " + parseLevel("Gotta go fast", inputString);
+                if (inputString.includes("Fractional Reserve")) leggings += " \u00A7dfrac\u00A77 " + parseLevel("Fractional Reserve", inputString);
+                if (inputString.includes("Peroxide")) leggings += " \u00A7cpero\u00A77 " + parseLevel("Peroxide", inputString);
+                if (inputString.includes("Golden Heart")) leggings += " \u00A76gheart\u00A77 " + parseLevel("Golden Heart", inputString);
+                if (inputString.includes("Last Stand")) leggings += " \u00A71laststand\u00A77 " + parseLevel("Last Stand", inputString);
+                if (inputString.includes("Not Gladiator")) leggings += " \u00A71notglad\u00A77 " + parseLevel("Not Gladiator", inputString);
+                if (inputString.includes("Prick")) leggings += " \u00A7cprick\u00A77 " + parseLevel("Prick", inputString);
+                if (inputString.includes("Protection")) leggings += " \u00A71prot\u00A77 " + parseLevel("Protection", inputString);
+                if (inputString.includes("David and Goliath")) leggings += " \u00A71dag\u00A77 " + parseLevel("David and Goliath", inputString);
                 if (inputString.includes("Ring Armor")) leggings += " \u00A71Ring Armor\u00A77 " + parseLevel("Ring Armor", inputString);
-                if (inputString.includes("Respawn: Absorption")) leggings += " \u00A71Respawn: Absorption\u00A77 " + parseLevel("Respawn: Absorption", inputString);
-                if (inputString.includes("Escape Pod")) leggings += " \u00A71Escape Pod\u00A77 " + parseLevel("Escape Pod", inputString);
-                if (inputString.includes("Counter-Offensive")) leggings += " \u00A71Counter-Offensive\u00A77 " + parseLevel("Counter-Offensive", inputString);
-                if (inputString.includes("Excess")) leggings += " \u00A71Excess\u00A77 " + parseLevel("Excess", inputString);
-                if (inputString.includes("Danger Close")) leggings += " \u00A71Danger Close\u00A77 " + parseLevel("Danger Close", inputString);
-                if (inputString.includes("Boo-boo")) leggings += " \u00A71Boo-boo\u00A77 " + parseLevel("Boo-boo", inputString);
+                if (inputString.includes("Respawn: Absorption")) leggings += " \u00A76abs\u00A77 " + parseLevel("Respawn: Absorption", inputString);
+                if (inputString.includes("Escape Pod")) leggings += " \u00A7apod\u00A77 " + parseLevel("Escape Pod", inputString);
+                if (inputString.includes("Counter-Offensive")) leggings += " \u00A71co\u00A77 " + parseLevel("Counter-Offensive", inputString);
+                if (inputString.includes("Excess")) leggings += " \u00A71excess\u00A77 " + parseLevel("Excess", inputString);
+                if (inputString.includes("Danger Close")) leggings += " \u00A71dangerclose\u00A77 " + parseLevel("Danger Close", inputString);
+                if (inputString.includes("Boo-boo")) leggings += " \u00A7cboo\u00A77 " + parseLevel("Boo-boo", inputString);
 
                 //resource enchantments
                 if (inputString.includes("Sweaty")) leggings += " \u00A71Sweaty\u00A77 " + parseLevel("Sweaty", inputString);
@@ -1250,6 +1295,11 @@ function parseLevel(matcher, str) {
 [ ----- Fishing Helper ----- ]
 [============================]
 
+this is for a certain server but
+its useless on hypixel if you
+dont know what its for its probably
+useless to you.
+
 */
 
 var FishingHelper = {
@@ -1336,6 +1386,7 @@ checkMatch: (paneHint, candName, candItemId) => {
 
 
 JsMacros.once("ChunkLoad", JavaWrapper.methodToJava( () => {
+	overlay.opposition = config.load();
     Chat.unregisterCommand("list");
     Chat.createCommandBuilder("list")
     .greedyStringArg("input")
@@ -1369,7 +1420,6 @@ JsMacros.once("ChunkLoad", JavaWrapper.methodToJava( () => {
             }
 
             config.save(overlay.opposition);
-            Chat.log(config.load().toString());
         } catch (e) {
             Chat.log(e.toString());
         }
